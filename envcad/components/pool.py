@@ -19,6 +19,7 @@ from typing import Optional
 from ezdxf.enums import TextEntityAlignment
 
 from ..standards.annotate import _t, draw_elevation
+from ..standards.dim import draw_linear_dimension, draw_diameter_dimension
 from .fittings import _hatch, _line, _poly
 from ..utils import _r  # v1.5: 统一工具函数
 
@@ -79,13 +80,13 @@ def draw_rect_pool_plan(msp, origin, p: RectPoolParams, scale: float,
        tracker=tracker)
 
     if show_dims:
-        # 尺寸标注（避让池体）
-        _t(msp, f"L={int(L)}", _r((ix0 + ix1) / 2, y0 - 4 * s), 3 * s,
-           align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
-           tracker=tracker)
-        _t(msp, f"W={int(W)}", _r(x1 + 4 * s, (iy0 + iy1) / 2), 3 * s,
-           align=TextEntityAlignment.MIDDLE_CENTER, layer="文字", rotation=90,
-           tracker=tracker)
+        # 真实 DIMENSION 实体（GB/T 4458.4）：池内净长 / 净宽
+        draw_linear_dimension(msp, (ix0, y0), (ix1, y0),
+                              offset=7.0, scale=s, layer="尺寸标注",
+                              tracker=tracker)
+        draw_linear_dimension(msp, (x1, iy0), (x1, iy1),
+                              offset=-7.0, scale=s, layer="尺寸标注",
+                              tracker=tracker)
 
     # 注册占用区域
     if tracker is not None:
@@ -138,16 +139,18 @@ def draw_rect_pool_section(msp, origin_x, origin_y: float, p: RectPoolParams,
     _line(msp, (ox - 6 * s, in_y), (ox + t, in_y), "管道-污水")
     _line(msp, (rx0, out_y), (rx0 + t + 6 * s, out_y), "管道-污水")
 
-    # ── 尺寸文字（池内标注 — 放在池体注册前以避免被挤出）──
+    # ── 尺寸标注（真实 DIMENSION 实体，GB/T 4458.4）──
+    # 排在池体注册之前：DIMENSION 自带匿名块几何，被注册区顶开反而会脱离构件
     if show_dims:
-        _t(msp, f"H={int(p.depth)}",
-           _r(ox + t + L * 0.5, (y_top + y_bot) / 2), 3 * s,
-           align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
-           tracker=tracker)
-        _t(msp, f"L={int(L)}",
-           _r(ox + t + L * 0.5, y_base - 4 * s), 3 * s,
-           align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
-           tracker=tracker)
+        # 池内净长（剖面下方）
+        draw_linear_dimension(msp, (ox + t, y_base), (rx0, y_base),
+                              offset=7.0, scale=s, layer="尺寸标注",
+                              tracker=tracker)
+        # 池深（剖面右侧；出水标高文字约到 rx0+t+14s，取 20s 让开）
+        draw_linear_dimension(msp, (rx0 + t, y_bot), (rx0 + t, y_top),
+                              offset=-20.0, scale=s, layer="尺寸标注",
+                              tracker=tracker)
+        # 壁厚仍用文字：250mm 在 1:100 下仅 2.5mm，放不下箭头
         _t(msp, f"t={int(t)}",
            _r(ox + t / 2, y_top + 3 * s), 2.5 * s,
            align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
@@ -194,9 +197,10 @@ def draw_circular_pool_plan(msp, center, diameter: float, wall_thick: float,
     _t(msp, name, (cx, cy - r - 5 * s), 4 * s,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
        tracker=tracker)
-    _t(msp, f"D={int(diameter)}", (cx, cy - r / 2 - 2 * s), 3 * s,
-       align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
-       tracker=tracker)
+    # 真实 DIMENSION 实体：外径 ⌀（引线沿 135° 指向左上，避开下方池名）
+    draw_diameter_dimension(msp, (cx, cy), r,
+                            angle=135.0, scale=s, layer="尺寸标注",
+                            tracker=tracker)
 
     _t(msp, f"DN{int(inlet_dn)}进水管",
        _r(cx, cy + r / 2 + 2 * s), 2.5 * s,
@@ -283,9 +287,13 @@ def draw_circular_pool_section(msp, origin_x, origin_y: float, diameter: float,
     _t(msp, name, (cx, y_top + 5 * s), 4 * s,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
        tracker=tracker)
-    _t(msp, f"总高 {total_h}m", (cx + r + 5 * s, (y_top + y_bot) / 2), 3 * s,
-       align=TextEntityAlignment.MIDDLE_CENTER, layer="文字", rotation=90,
-       tracker=tracker)
+    # 真实 DIMENSION 实体（GB/T 4458.4）：池内直径 / 总深
+    draw_linear_dimension(msp, (ox, y_bot), (rx0, y_bot),
+                          offset=8.0, scale=s, layer="尺寸标注",
+                          tracker=tracker)
+    draw_linear_dimension(msp, (rx0, y_top), (rx0, y_bot),
+                          offset=-8.0, scale=s, layer="尺寸标注",
+                          tracker=tracker)
     _t(msp, f"污泥斗 {hopper_h}m",
        (cx - r * 0.4, (y_bot + y_hopper_top) / 2), 2.5 * s,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",

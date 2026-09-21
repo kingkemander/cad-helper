@@ -100,6 +100,20 @@ def setup_dimstyles(doc: ezdxf.drawing.Drawing, scale: float = 1.0) -> str:
     dim.dxf.dimclrd = 3
     dim.dxf.dimclre = 3
 
+    # GB/T 4458.4：小数点用 "."。
+    # 注意 ezdxf 的 DIMSTYLE 级 dimdsep 默认 44(",")，且 DimStyleOverride
+    # 在取不到该变量时也会返回 ","——与头部变量 $DIMDSEP 无关，
+    # 因此必须在样式上显式设为 46(".")，否则真实 DIMENSION 会出成 "4000,00"。
+    dim.dxf.dimdsep = ord(".")
+
+    # GB/T 4458.4：不写多余小数位。
+    # dimzin 作用于标注文字，dimtzin 作用于公差文字（ezdxf 的 Tolerance 读的是
+    # dimtzin，默认 0 -> 下偏差 0 会出成 "0.000"）。
+    # 8 = 去尾零且保留前导零："4000.00"->"4000"、"0.000"->"0"、"0.018" 保持不变。
+    # 注意不可用 4/12（会去掉前导零，把 0.018 写成 .018）。
+    dim.dxf.dimzin = 8
+    dim.dxf.dimtzin = 8
+
     # 精度变量
     dim.dxf.dimdec = 2                  # 小数位
     dim.dxf.dimrnd = 0.01               # 圆整

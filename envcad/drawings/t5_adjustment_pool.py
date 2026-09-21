@@ -48,7 +48,7 @@ def _draw(doc, scale, p: RectPoolParams, title, no, tracker=None):
     notes = _base_notes(p) + p.extra_req
     draw_tech_notes(msp, (x1 - 95 * scale, y1 - (8 + len(notes)) * scale - 5 * scale), scale,
                     "土建施工技术要求", notes, tracker=tracker)
-    return doc
+    return doc, info
 
 
 def gen_t5a(out_dir: str, scale: float = 100.0) -> str:
@@ -57,7 +57,7 @@ def gen_t5a(out_dir: str, scale: float = 100.0) -> str:
                        material="C30钢筋混凝土", top_elev=0.000, bottom_elev=-4.000,
                        inlet_il=-0.500, outlet_il=-1.200, water_level=-0.300, name="调节池")
     doc, _, tracker = new_drawing(scale, return_tracker=True)
-    _draw(doc, scale, p, "调节池平剖面图（第一步 8×5×4m）", "T5-01", tracker=tracker)
+    doc, info = _draw(doc, scale, p, "调节池平剖面图（第一步 8×5×4m）", "T5-01", tracker=tracker)
     return save_dxf_autofit(doc, os.path.join(out_dir, "T5a_调节池_第一步_8x5x4.dxf"), scale, info, tracker)
 
 
@@ -68,7 +68,7 @@ def gen_t5b(out_dir: str, scale: float = 100.0) -> str:
                        inlet_il=-0.800, outlet_il=-1.200, water_level=-0.300, name="调节池")
     p.extra_req = ["内壁做环氧树脂玻璃钢两布三油防腐。"]
     doc, _, tracker = new_drawing(scale, return_tracker=True)
-    _draw(doc, scale, p, "调节池平剖面图（第二步 8×6×4m 进水-0.800）", "T5-02", tracker=tracker)
+    doc, info = _draw(doc, scale, p, "调节池平剖面图（第二步 8×6×4m 进水-0.800）", "T5-02", tracker=tracker)
     return save_dxf_autofit(doc, os.path.join(out_dir, "T5b_调节池_第二步_8x6x4_防腐.dxf"), scale, info, tracker)
 
 

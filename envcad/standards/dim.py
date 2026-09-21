@@ -165,6 +165,245 @@ def add_dim_style_tolerance(doc, dimstyle_name: str,
     return dimstyle_name
 
 
+def _dim_base_override(s: float) -> dict:
+    """真实 DIMENSION 实体所需的样式变量基线（图纸 mm → 模型单位）。
+
+    本引擎的模型空间按 1:1 实物尺寸作图，图纸上的 mm 量需乘出图比例倒数 s。
+    """
+    return {
+        "dimtxt": 3.5 * s,      # 标注文字高 3.5mm（GB/T 14691）
+        "dimasz": 2.5 * s,      # 箭头长度 2.5mm
+        "dimexe": 2.0 * s,      # 尺寸界线超出尺寸线 2mm
+        "dimexo": 1.2 * s,      # 尺寸界线起点偏移
+        "dimgap": 1.5 * s,      # 文字与尺寸线间隙
+        "dimdsep": ord("."),    # GB：小数点用 "."（ezdxf 默认 44=","）
+        "dimzin": 8,            # 标注文字去尾零、保留前导零
+        "dimtzin": 8,           # 公差文字同上（否则下偏差 0 出成 "0.000"）
+    }
+
+
+def ensure_dimstyle(doc, scale: float, name: str = "") -> str:
+    """返回一个可用的标注样式名。
+
+    优先用调用方指定名 → 否则 `GB-DIM-{scale}`（缺失则现场创建）。
+    裸 ezdxf 文档（无 HZ 文字样式）也能安全使用：会先补文字样式。
+    """
+    from .styles import setup_text_styles, setup_dimstyles
+
+    if "HZ" not in doc.styles:
+        try:
+            setup_text_styles(doc)
+        except Exception:
+            pass
+
+    want = name or f"GB-DIM-{int(scale)}"
+    if want in doc.dimstyles:
+        return want
+    try:
+        got = setup_dimstyles(doc, scale)
+        if got in doc.dimstyles:
+            return got
+    except Exception:
+        pass
+    return "Standard" if "Standard" in doc.dimstyles else want
+
+
+def _apply_tolerance(ov: dict, upper, lower, sym: bool) -> None:
+    """把上/下偏差转成 DIMSTYLE 级公差变量（ezdxf 原生堆叠，勿用文字覆盖）。"""
+    def num(v):
+        try:
+            return abs(float(str(v).lstrip("+")))
+        except (TypeError, ValueError):
+            return 0.0
+
+    u, l = num(upper), num(lower)
+    if sym and upper:
+        ov.update(dimtol=2, dimtp=u, dimtm=u)
+    else:
+        ov.update(dimtol=1, dimtp=u, dimtm=l)
+
+    dec = 2
+    for v in (upper, lower):
+        t = str(v).lstrip("+")
+        if "." in t:
+            dec = max(dec, len(t.split(".")[1]))
+    ov.update(dimtdec=dec, dimtfac=1.0)
+
+
+def draw_linear_dimension(msp, p1: Tuple[float, float], p2: Tuple[float, float],
+                          offset: float = 10.0, scale: float = 100.0,
+                          dimstyle: str = "", text: str = "",
+                          upper: str = "", lower: str = "", sym: bool = False,
+                          layer: str = "尺寸标注", tracker=None,
+                          angle: Optional[float] = None):
+    """用**真实 DIMENSION 实体**绘制线性标注（GB/T 4458.4）。
+
+    与手工画线相比：产出可被 CAD 识别、可关联测量的 DIMENSION 实体，
+    箭头/尺寸线/尺寸界线/公差堆叠全部由标注样式原生渲染，且
+    `ezdxf.bbox` 会递归进其匿名块，幅面重选时能正确计入占位。
+    """
+    s = float(scale)
+    x1, y1 = _r(*p1)
+    x2, y2 = _r(*p2)
+    off = offset * s
+
+    dx, dy = x2 - x1, y2 - y1
+    horizontal = abs(dx) >= abs(dy)
+    if angle is None:
+        angle = 0.0 if horizontal else 90.0
+
+    # base = 尺寸线经过的点，决定标注放在构件哪一侧
+    if horizontal:
+        base = ((x1 + x2) / 2, min(y1, y2) - off)
+    else:
+        base = (min(x1, x2) - off, (y1 + y2) / 2)
+
+    style = ensure_dimstyle(msp.doc, s, dimstyle)
+    ov = _dim_base_override(s)
+    if upper or lower:
+        _apply_tolerance(ov, upper, lower, sym)
+
+    dim = msp.add_linear_dim(
+        base=base, p1=(x1, y1), p2=(x2, y2), angle=angle,
+        dimstyle=style, override=ov,
+        text=text if text else "<>",
+        dxfattribs={"layer": layer},
+    )
+    dim.render()
+
+    mx, my = base
+    if tracker is not None:
+        tracker.register(mx - 6 * s, my - 4 * s,
+                         mx + 6 * s, my + 6 * s, margin=30)
+    return (mx, my)
+
+
+def _fix_diameter_arrow2(doc, dim, center: Tuple[float, float]) -> bool:
+    """修正 ezdxf 直径标注 defpoint4 一侧箭头与另一端同向的问题。
+
+    `ezdxf.render.dim_radius.RadiusDimension.add_arrow()` 用**同一个**
+    `dim_line_angle (+180)` 计算两端箭头旋转，而直径标注的两端在对径位置，
+    于是第二端箭头朝向反了（两端箭头同向）。这里按几何关系重算该箭头旋转，
+    并把被它带偏的尺寸线端点、引出线端点一并校正。
+
+    仅在检测到"两端箭头同向"时动手；文字在圆内时 ezdxf 本就对称，直接放行。
+    返回是否做了修正。
+    """
+    name = dim.dxf.geometry
+    if not name or name not in doc.blocks:
+        return False
+    blk = doc.blocks.get(name)
+
+    from ezdxf.math import Vec2
+
+    try:
+        p1 = Vec2(dim.dxf.defpoint)
+        p2 = Vec2(dim.dxf.defpoint4)
+    except Exception:
+        return False
+    ctr = Vec2(_r(*center))
+
+    inserts, lines = [], []
+    for e in blk:
+        t = e.dxftype()
+        if t == "INSERT":
+            inserts.append(e)
+        elif t == "LINE":
+            lines.append(e)
+
+    def _near(a: Vec2, b: Vec2, tol: float) -> bool:
+        return (a - b).magnitude <= tol
+
+    span = max((p1 - ctr).magnitude, 1.0)
+    tol = span * 1e-4
+
+    at_p1 = [e for e in inserts if _near(Vec2(e.dxf.insert), p1, tol)]
+    at_p2 = [e for e in inserts if _near(Vec2(e.dxf.insert), p2, tol)]
+    if len(at_p1) != 1 or len(at_p2) != 1:
+        return False
+
+    a1, a2 = at_p1[0], at_p2[0]
+    rot1 = float(a1.dxf.get("rotation", 0.0))
+    rot2 = float(a2.dxf.get("rotation", 0.0))
+    # 两端箭头应相差 180°；差值接近 0/360 即为同向 bug
+    delta = abs(((rot2 - rot1) % 360.0) - 180.0)
+    if delta < 90.0:
+        return False
+
+    arrow_len = float(a2.dxf.get("xscale", 0.0) or 0.0)
+    if arrow_len <= 0.0:
+        return False
+
+    u = (p2 - ctr)
+    if u.magnitude <= 0.0:
+        return False
+    u = u.normalize()
+
+    # 箭头尖端仍在 p2，箭体应指向圆心：rot = angle(-u) - 180
+    a2.dxf.rotation = math.degrees(math.atan2(-u.y, -u.x)) - 180.0
+
+    old_cp = p2 + u * arrow_len      # ezdxf 用错误旋转算出的旧连接点
+    new_cp = p2 - u * arrow_len      # 修正后的箭头根部
+
+    for ln in lines:
+        for attr, other_attr in (("start", "end"), ("end", "start")):
+            p = Vec2(ln.dxf.get(attr))
+            if not _near(p, old_cp, tol):
+                continue
+            o = Vec2(ln.dxf.get(other_attr))
+            # 另一端在圆心对侧 → 尺寸线；否则是引向文字的引出线
+            if (o - ctr).dot(u) < 0.0:
+                ln.dxf.set(attr, new_cp)
+            else:
+                ln.dxf.set(attr, p2)
+            break
+    return True
+
+
+def draw_diameter_dimension(msp, center: Tuple[float, float], radius: float,
+                            angle: float = 45.0, scale: float = 100.0,
+                            dimstyle: str = "", text: str = "",
+                            prefix: str = "",
+                            layer: str = "尺寸标注", tracker=None):
+    """用**真实 DIMENSION 实体**绘制直径标注（⌀，GB/T 4458.4）。
+
+    与线性标注的差别：直径 DIMENSION 的 defpoint/defpoint4 是圆上对径两点。
+    直径前缀**不要自己加**——`ezdxf.render.dim_diameter` 的 `DiameterDimension`
+    会自动带上 `Ø`（存盘时转义成 DXF 惯例的 `%%c`），自己再加会出现
+    `⌀%%c6000` 这类重复前缀。
+    """
+    s = float(scale)
+    cx, cy = _r(*center)
+    r_ = float(radius)
+
+    style = ensure_dimstyle(msp.doc, s, dimstyle)
+    ov = _dim_base_override(s)
+
+    # 首个 "<>" 会被替换为实测直径；prefix 仅在需要非 ⌀ 前缀时才传
+    label = text if text else (prefix + "<>")
+
+    dim = msp.add_diameter_dim(
+        center=(cx, cy), radius=r_, angle=angle,
+        dimstyle=style, override=ov,
+        text=label, dxfattribs={"layer": layer},
+    )
+    dim.render()
+    try:
+        # add_diameter_dim 返回的是 DimStyleOverride，需取回 DIMENSION 实体本体
+        _fix_diameter_arrow2(msp.doc, getattr(dim, "dimension", dim), (cx, cy))
+    except Exception:
+        pass  # 修正失败不影响主几何：直径标注本身仍可用
+
+    # 文字大致落在背离圆心 45° 方向、距圆心约 0.6r 处
+    rad = math.radians(angle)
+    tx = cx + r_ * 0.6 * math.cos(rad)
+    ty = cy + r_ * 0.6 * math.sin(rad)
+    if tracker is not None:
+        tracker.register(tx - 6 * s, ty - 4 * s,
+                         tx + 6 * s, ty + 6 * s, margin=30)
+    return (tx, ty)
+
+
 def draw_dimension(msp, p1: Tuple[float, float], p2: Tuple[float, float],
                    offset: float = 10.0, scale: float = 100.0,
                    dimstyle: str = "Standard",
@@ -172,7 +411,7 @@ def draw_dimension(msp, p1: Tuple[float, float], p2: Tuple[float, float],
                    sym: bool = False,
                    layer: str = "尺寸标注",
                    tracker=None):
-    """绘制带公差的线性标注。
+    """绘制带公差的线性标注（真实 DIMENSION 实体，失败回退手工画线）。
 
     参数:
         p1, p2: 标注起止点
@@ -183,6 +422,28 @@ def draw_dimension(msp, p1: Tuple[float, float], p2: Tuple[float, float],
         lower: 下偏差（如 "0"）
         sym: True = 对称公差（用 ± 符号）
     """
+    try:
+        return draw_linear_dimension(
+            msp, p1, p2, offset=offset, scale=scale,
+            dimstyle=("" if dimstyle in ("", "Standard") else dimstyle),
+            text=text, upper=upper, lower=lower, sym=sym,
+            layer=layer, tracker=tracker)
+    except Exception as _e:
+        print(f"[WARNING] dim.py: 真实 DIMENSION 生成失败，回退手工标注：{_e}")
+        return _draw_dimension_manual(
+            msp, p1, p2, offset=offset, scale=scale, dimstyle=dimstyle,
+            text=text, upper=upper, lower=lower, sym=sym,
+            layer=layer, tracker=tracker)
+
+
+def _draw_dimension_manual(msp, p1: Tuple[float, float], p2: Tuple[float, float],
+                           offset: float = 10.0, scale: float = 100.0,
+                           dimstyle: str = "Standard",
+                           text: str = "", upper: str = "", lower: str = "",
+                           sym: bool = False,
+                           layer: str = "尺寸标注",
+                           tracker=None):
+    """手工画线版线性标注（回退路径，不产 DIMENSION 实体）。"""
     s = scale
     x1, y1 = _r(*p1)
     x2, y2 = _r(*p2)
