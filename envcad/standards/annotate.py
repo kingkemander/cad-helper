@@ -48,12 +48,16 @@ def _compute_bbox(px, py, text_w, txt_h, align) -> tuple:
 
 def _t(msp, content, point, height,
        align=TextEntityAlignment.LEFT, layer="文字", rotation=0,
-       tracker=None, text_w=0.0, frame_bbox=None):
+       tracker=None, text_w=0.0, frame_bbox=None, avoid=True):
     """修复版文字放置 v1.5：带边界检查的碰撞避让 + 精确宽度估算。
 
     tracker: 可选 BBoxTracker，传入后自动避让 + 注册。
     text_w:  手动指定文字宽度（mm）。0 则自动估算。
     frame_bbox: 可选图框边界 (x0, y0, x1, y1)，传入后确保文字在框内。
+    avoid:   是否启用碰撞避让。**表格单元格必须传 False**：单元格由行列定位，
+             避让算法会按 ``height*1.2`` 的步长把文字推离原位，实测会把整张
+             设备材料表推散（行距从 550 变成 74~937 乱序、文字跑到表格外）。
+             表格里"位置"是设计要求而非待优化项，故只登记占位、不做避让。
     """
     if not content:
         return None
@@ -92,7 +96,7 @@ def _t(msp, content, point, height,
 
     # ── 碰撞检测 ──
     if tracker is not None:
-        if tracker.is_occupied(bx0, by0, bx1, by1):
+        if avoid and tracker.is_occupied(bx0, by0, bx1, by1):
             # ── 智能避让策略 ──
             found = False
             candidates = []

@@ -44,10 +44,15 @@ def _draw(doc, scale, p: RectPoolParams, title, no, tracker=None):
     draw_rect_pool_section(msp, x0 + 4000, y0 + 21000, p, scale, tracker=tracker)
     _t(msp, "1-1 剖面图", (x0 + 8000, y0 + 22000 + 5 * scale), 3.5 * scale, layer="文字-标题",
        tracker=tracker)
-    # 技术要求（基础 + extra_req）
+    # 技术要求（基础 + extra_req）—— 贴着**主体包络**右侧，不锚 refit 前图框角点。
+    # 旧写法锚在初始图框（进程默认 A2）右上角，把内容包络撑到 A1
+    # （主体只需 A2，实测虚涨 1.86 倍）。
     notes = _base_notes(p) + p.extra_req
-    draw_tech_notes(msp, (x1 - 95 * scale, y1 - (8 + len(notes)) * scale - 5 * scale), scale,
-                    "土建施工技术要求", notes, tracker=tracker)
+    from ..standards.frame import content_bbox
+    from ..standards.layout import AuxColumn
+    AuxColumn(msp, content_bbox(msp, exclude_annex=True), scale,
+              gap=1500.0, tracker=tracker).add(
+        draw_tech_notes, "土建施工技术要求", notes, width=95.0, tracker=tracker)
     return doc, info
 
 

@@ -76,8 +76,10 @@ def gen_t3(out_dir: str, scale: float = 50.0,
                     length=20.0, label="水流方向")
 
     # 管长标注
-    _t(msp, f"L={int(length)}mm  i={slope_pct:.1f}%",
-       ((px0 + px1) / 2, pipe_y + 12 * scale), 3 * scale,
+    # 坡度已由上面的 draw_slope 标过（offset=10），这里不再重复写 i=…%；
+    # 旧写法两行 y 仅差 2*scale，实测叠印 58%。改只标管长，并再上抬一行。
+    _t(msp, f"L={int(length)}mm",
+       ((px0 + px1) / 2, pipe_y + 16 * scale), 3 * scale,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
        tracker=tracker)
 
@@ -87,26 +89,30 @@ def gen_t3(out_dir: str, scale: float = 50.0,
     _t(msp, "厌氧池", (px1 + 3 * scale, pipe_y + 8 * scale), 3 * scale, layer="文字-标题",
        tracker=tracker)
 
-    # 图例
-    draw_legend(msp, (x1 - 50 * scale, y1 - 75 * scale), scale,
-                [("pipe_solid", "污水管", f"DN{int(dn)} HDPE"),
-                 ("valve", "手动闸阀", "DN350"),
-                 ("soft_joint", "橡胶软接头", "DN350"),
-                 ("flow_meter", "电磁流量计", "DN350"),
-                 ("sleeve", "刚性防水套管", "DN350"),
-                 ("arrow_flow", "水流方向", "顺坡"),
-                 ("elevation", "管内底标高", "单位 m")],
-                tracker=tracker)
-
-    # 技术要求
-    draw_tech_notes(msp, (x0 + 3 * scale, y1 - 32 * scale), scale,
-                    "管道施工技术要求",
-                    [f"管材采用 HDPE 管 DN{int(dn)}，电熔连接。",
-                     f"管道坡度 {slope_pct:.1f}%，坡向水流方向，严禁倒坡。",
-                     "穿墙处设刚性防水套管，套管与管道间填麻丝沥青密封。",
-                     "闸阀、软接头、流量计安装间距满足检修要求。",
-                     "管道施工及验收执行 GB 50268—2008。"],
-                    tracker=tracker)
+    # 图例 + 技术要求 —— 贴着**主体包络**右侧堆叠
+    # 旧写法把图例锚在 (x1-50*s, y1-75*s)、技术要求锚在 (x0+3*s, y1-32*s)，
+    # 分别贴在初始图框（进程默认 A2）的右上角/左上角，两者相距近整张图框宽，
+    # 内容包络被撑到 A1（主体只需 A3，实测虚涨 2.18 倍）。
+    from ..standards.frame import content_bbox
+    from ..standards.layout import AuxColumn
+    body = content_bbox(msp, exclude_annex=True)
+    col = AuxColumn(msp, body, scale, gap=1500.0, tracker=tracker)
+    col.add(draw_legend,
+            [("pipe_solid", "污水管", f"DN{int(dn)} HDPE"),
+             ("valve", "手动闸阀", "DN350"),
+             ("soft_joint", "橡胶软接头", "DN350"),
+             ("flow_meter", "电磁流量计", "DN350"),
+             ("sleeve", "刚性防水套管", "DN350"),
+             ("arrow_flow", "水流方向", "顺坡"),
+             ("elevation", "管内底标高", "单位 m")], tracker=tracker)
+    col.add(draw_tech_notes,
+            "管道施工技术要求",
+            [f"管材采用 HDPE 管 DN{int(dn)}，电熔连接。",
+             f"管道坡度 {slope_pct:.1f}%，坡向水流方向，严禁倒坡。",
+             "穿墙处设刚性防水套管，套管与管道间填麻丝沥青密封。",
+             "闸阀、软接头、流量计安装间距满足检修要求。",
+             "管道施工及验收执行 GB 50268—2008。"],
+            width=95.0, tracker=tracker)
 
     return save_dxf_autofit(doc, os.path.join(out_dir, "T3_污水自流管网平面布置图.dxf"), scale, info, tracker)
 

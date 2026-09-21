@@ -17,6 +17,7 @@ import json
 import os
 from dataclasses import dataclass
 
+from ezdxf import bbox as _ezbbox
 from ezdxf.enums import TextEntityAlignment
 
 from ..engine.dxf_base import save_dxf
@@ -258,8 +259,54 @@ def _text_extent(e):
     return (x0, y0, x1, y1)
 
 
+def _ez_extent(e):
+    """用 ezdxf 官方 bbox 测单实体；(x0,y0,x1,y1) 或 None。
+
+    官方 bbox 是唯一能覆盖全部实体类型的通道：它认识 DIMENSION 的匿名几何块
+    （``*Dn``，箭头/尺寸线/界线/文字都在里面）、HATCH、SOLID、INSERT。
+    """
+    try:
+        b = _ezbbox.extents([e])
+    except Exception:
+        return None
+    if not b.has_data:
+        return None
+    return (b.extmin.x, b.extmin.y, b.extmax.x, b.extmax.y)
+
+
+def _dimension_extent(e):
+    """DIMENSION 的占位。
+
+    **绝不能用 ``dxf.insert`` 兜底**：尺寸实体的 ``insert`` 恒为 (0,0)，
+    一旦走兜底就会在原点造出一个假占位 —— 既漏计尺寸自身占位（尺寸可能被
+    图框切掉），又把内容包络一路拉到原点、把幅面抬高一档。
+    这里优先用官方 bbox（递归几何块），失败才退回"定义点 + 文字中点"。
+    """
+    r = _ez_extent(e)
+    if r is not None:
+        return r
+    pts = []
+    for k in ("defpoint", "defpoint2", "defpoint3", "defpoint4", "text_midpoint"):
+        v = e.dxf.get(k, None)
+        if v is not None:
+            pts.append((float(v[0]), float(v[1])))
+    if not pts:
+        return None
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def _entity_extent(e):
-    """单实体包围盒 (x0,y0,x1,y1)；不可测量时返回 None。"""
+    """单实体包围盒 (x0,y0,x1,y1)；不可测量时返回 None。
+
+    v1.5.8 修复：本仓库所用 ezdxf 版本里 **没有任何实体带 ``.bbox()`` 方法**
+    （实测 LWPOLYLINE/LINE/TEXT/DIMENSION/HATCH 全部为 "无"），旧实现的
+    ``e.bbox()`` 分支实际是死代码 —— DIMENSION/HATCH/SOLID/INSERT 等一律落到
+    ``dxf.insert`` 兜底。对尺寸标注尤其致命：它的 ``insert`` 恒为 (0,0)，于是
+    22 个尺寸实体全部被量成 (0,0,0,0)，主体占位漏计、原点假占位又把幅面抬高
+    （实测 T4-01 因此从 A2 被抬到 A1）。现统一改走 ``ezdxf.bbox.extents``。
+    """
     t = e.dxftype()
     if t in ("TEXT", "MTEXT"):
         try:
@@ -278,11 +325,19 @@ def _entity_extent(e):
         elif t in ("ARC", "CIRCLE"):
             c, r = e.dxf.center, e.dxf.radius
             return (c.x - r, c.y - r, c.x + r, c.y + r)
-        b = e.bbox()
-        if b:
-            return (b.extmin.x, b.extmin.y, b.extmax.x, b.extmax.y)
     except Exception:
         pass
+
+    # 尺寸/引线：insert 无坐标语义，必须显式处理
+    if t in ("DIMENSION", "LEADER", "MLEADER"):
+        return _dimension_extent(e)
+
+    # 通用路径：官方 bbox（覆盖 HATCH/SOLID/INSERT/ELLIPSE/SPLINE 等）
+    r = _ez_extent(e)
+    if r is not None:
+        return r
+
+    # 最后兜底：仅有 insert 语义的实体才用插入点
     try:
         ip = e.dxf.insert
         return (ip.x, ip.y, ip.x, ip.y)
@@ -309,6 +364,89 @@ def _content_bbox(msp, scale=1.0):
         xmax, ymax = max(xmax, b[2]), max(ymax, b[3])
     if xmax < xmin or ymax < ymin:
         return (0.0, 0.0, 1.0, 1.0)
+    return (xmin, ymin, xmax, ymax)
+
+
+def annex_regions(msp, join=400.0):
+    """把 ``附表`` 层上的图元聚成一个个"附表块"的外框列表。
+
+    附表块的**外框线**在 ``附表`` 层，但块内文字在 ``文字`` / ``文字-标题`` 层
+    （沿用正文的文字样式）。只按图层排除是排不干净附表内容的，所以这里先按
+    图元包围盒把附表层几何聚成若干块（相邻/相交的归为同一块），供
+    :func:`content_bbox` 连带排除块内文字。
+    """
+    rects = []
+    for e in list(msp):
+        if e.dxf.layer != AUX_LAYER:
+            continue
+        b = _entity_extent(e)
+        if b is not None:
+            rects.append(list(b))
+
+    # 简单并查集：膨胀 join 后相交的归为同一块
+    n = len(rects)
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = rects[i], rects[j]
+            if not (a[2] + join < b[0] or b[2] + join < a[0]
+                    or a[3] + join < b[1] or b[3] + join < a[1]):
+                ri, rj = find(i), find(j)
+                if ri != rj:
+                    parent[rj] = ri
+
+    groups = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(rects[i])
+
+    out = []
+    for g in groups.values():
+        out.append((min(r[0] for r in g), min(r[1] for r in g),
+                    max(r[2] for r in g), max(r[3] for r in g)))
+    return out
+
+
+def content_bbox(msp, scale=1.0, exclude_annex=False):
+    """**主体**外包络 (xmin,ymin,xmax,ymax)，供图纸内部就地锚定附表用。
+
+    ``exclude_annex=True`` 时排除全部附表块（外框 + 块内文字），量到的是
+    "不含技术要求框 / 图例 / 表格"的主体图形（池体、管道、尺寸、注记）。
+
+    为什么需要它：各生成器把图例/技术要求锚在 ``draw_frame`` 返回的**初始图框**
+    （进程默认 A2）角点上，例如 ``(x1 - 90*s, y1 - 25*s)``。``save_dxf_autofit``
+    之后才按内容重选幅面，于是这些"锚在初始图框角点"的附表把内容外包络撑开，
+    实测 12 张成图全部虚涨 1.04~4.78 倍，多张被迫从 A3 抬到 A1。
+    正确做法是先量主体包络，再用 ``layout.AuxColumn`` 把附表贴着主体右侧堆叠。
+    """
+    skip = set(SHEET_LAYERS)
+    regions = []
+    if exclude_annex:
+        skip.add(AUX_LAYER)
+        regions = annex_regions(msp)
+    xmin = ymin = 1e18
+    xmax = ymax = -1e18
+    for e in list(msp):
+        if e.dxf.layer in skip:
+            continue
+        b = _entity_extent(e)
+        if b is None:
+            continue
+        if regions:
+            cx, cy = (b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0
+            if any(r[0] - 200.0 <= cx <= r[2] + 200.0 and
+                   r[1] - 200.0 <= cy <= r[3] + 200.0 for r in regions):
+                continue
+        xmin, ymin = min(xmin, b[0]), min(ymin, b[1])
+        xmax, ymax = max(xmax, b[2]), max(ymax, b[3])
+    if xmax < xmin or ymax < ymin:
+        return None
     return (xmin, ymin, xmax, ymax)
 
 

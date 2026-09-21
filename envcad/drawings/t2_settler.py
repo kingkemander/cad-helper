@@ -39,7 +39,12 @@ def gen_t2(out_dir: str, scale: float = 50.0,
     draw_circular_pool_plan(msp, (plan_cx, plan_cy), diameter, 250, scale,
                             name="竖流斜管沉淀池", inlet_dn=inlet_dn, sludge_dn=sludge_dn,
                             tracker=tracker)
-    _t(msp, "平面图", (plan_cx, y0 + 9 * scale), 3.5 * scale,
+    # 图名紧跟各自图形下方。
+    # 旧写法把"平面图"和"1-1 剖面图"都钉在 y0+9*scale（图框最底边），而平面圆
+    # 下缘在 y0+8350、剖面在 y0+10100 —— 两个图名与图之间空出 158mm 死区，
+    # 内容外包络因此凭空长高 158mm，把幅面从 A2 顶到 A1。
+    plan_bottom = plan_cy - (diameter / 2 + 250)
+    _t(msp, "平面图", (plan_cx, plan_bottom - 16 * scale), 3.5 * scale,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
        tracker=tracker)
 
@@ -50,19 +55,26 @@ def gen_t2(out_dir: str, scale: float = 50.0,
                                250, scale, top_elev=0.300,
                                name="竖流斜管沉淀池", inlet_dn=inlet_dn, sludge_dn=sludge_dn,
                                tracker=tracker)
-    _t(msp, "1-1 剖面图", (sec_x + diameter / 2, y0 + 9 * scale), 3.5 * scale,
+    _t(msp, "1-1 剖面图", (sec_x + diameter / 2, sec_y - total_h * 1000 - 24 * scale),
+       3.5 * scale,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
        tracker=tracker)
 
-    # 安装技术要求
-    draw_tech_notes(msp, (x1 - 95 * scale, y1 - 32 * scale), scale,
-                    "安装技术要求",
-                    ["池体采用 C30 钢筋混凝土，抗渗等级 P6，壁厚 250mm。",
-                     "斜管采用蜂窝斜管填料，管径 Φ80，安装倾角 60°。",
-                     f"中心进水管 DN{int(inlet_dn)}，排泥管 DN{int(sludge_dn)}，管材 UPVC。",
-                     "周边出水堰采用三角堰，堰口高程一致，高差≤2mm。",
-                     "池体内壁做环氧树脂玻璃钢防腐（两布三油）。",
-                     "施工及验收执行 GB 50141—2008。"],
-                    tracker=tracker)
+    # 安装技术要求 —— 贴着**主体包络**右侧堆叠，不锚 refit 前的图框角点
+    # 旧写法 (x1-95*s, y1-32*s) 锚在 draw_frame 返回的初始图框（进程默认 A2）
+    # 右上角，把内容包络撑到 A1 宽（主体只需 A2，实测虚涨 1.61 倍）。
+    from ..standards.frame import content_bbox
+    from ..standards.layout import AuxColumn
+    body = content_bbox(msp, exclude_annex=True)
+    col = AuxColumn(msp, body, scale, gap=1500.0, tracker=tracker)
+    col.add(draw_tech_notes,
+            "安装技术要求",
+            ["池体采用 C30 钢筋混凝土，抗渗等级 P6，壁厚 250mm。",
+             "斜管采用蜂窝斜管填料，管径 Φ80，安装倾角 60°。",
+             f"中心进水管 DN{int(inlet_dn)}，排泥管 DN{int(sludge_dn)}，管材 UPVC。",
+             "周边出水堰采用三角堰，堰口高程一致，高差≤2mm。",
+             "池体内壁做环氧树脂玻璃钢防腐（两布三油）。",
+             "施工及验收执行 GB 50141—2008。"],
+            width=95.0, tracker=tracker)
 
     return save_dxf_autofit(doc, os.path.join(out_dir, "T2_竖流斜管沉淀池平剖面图.dxf"), scale, info, tracker)

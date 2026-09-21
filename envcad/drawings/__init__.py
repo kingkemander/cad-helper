@@ -31,11 +31,18 @@ def draw_tech_notes(msp, origin, scale: float, title: str, notes: list,
     # 注：框内文字为框内精确定位，不参与碰撞避让
     # （否则会被自身外框注册区顶出框外，导致错行）；外框已注册，外部标注自会避让。
     msp.add_line((x0, y1 - title_h), (x1, y1 - title_h), dxfattribs={"layer": "附表"})
-    _t(msp, title, ((x0 + x1) / 2, y1 - title_h / 2 + 0.5 * s), 3.5 * s,
+    # 标题与条目一律用**垂直居中**对齐（MIDDLE_CENTER / MIDDLE_LEFT），
+    # 不要用 LEFT/BASELINE + 手工 +0.5s 偏移：_t 估的框高是 height*1.6，
+    # 基线对齐时文字框整体坐在基线之上，标题框底边 = y1-5.8s、首条框顶边
+    # = y1-5.5s，实测每张图的"技术要求"标题都与第 1 条叠印 30mm（1:100 下
+    # 0.3mm，纸面上已经粘字，而 15% 面积阈值筛不出来）。
+    # 居中后标题框 y1-6.3s..y1-0.7s、首条框 y1-12s..y1-8s，各留 1.7s 净距。
+    _t(msp, title, ((x0 + x1) / 2, y1 - title_h / 2), 3.5 * s,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题")
     for i, note in enumerate(notes):
         ry = y1 - title_h - (i + 0.5) * rh
-        _t(msp, f"{i+1}. {note}", (x0 + 2 * s, ry + 0.5 * s), 2.5 * s, layer="文字")
+        _t(msp, f"{i+1}. {note}", (x0 + 2 * s, ry), 2.5 * s,
+           align=TextEntityAlignment.MIDDLE_LEFT, layer="文字")
     return (x0, y0, x1, y1)
 
 

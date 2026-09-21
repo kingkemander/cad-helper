@@ -23,6 +23,9 @@ from ..standards.annotate import (
     _t, draw_elevation, draw_flow_arrow, draw_pipe_diameter,
 )
 from ..standards.legend import draw_legend
+from ..standards.frame import content_bbox
+from ..standards.layout import AuxColumn
+from ..standards.site import draw_north_arrow
 from ..components.pipe import draw_pipe
 
 # ─── 几何工具 ────────────────────────────────────────────
@@ -402,20 +405,19 @@ def gen_t6(out_dir: str, scale: float = 200.0) -> str:
         ("elevation", "管底标高", "单位 m"),
         ("slope", "管道坡度", "i=%"),
     ]
-    draw_legend(msp, (x1 - 78 * s, y1 - 2.5 * s), s, legend_items,
-                title="图  例", col_widths=(16, 28, 32), row_h=7.0, tracker=tracker)
-
-    # ── 指北针（内框左上） ──
-    nx, ny = x0 + 6 * s, y1 - 5 * s
-    msp.add_circle((nx, ny), 3.5 * s, dxfattribs={"layer": "粗实线"})
-    msp.add_lwpolyline([(nx, ny + 3.5 * s), (nx - 2 * s, ny - 2 * s),
-                        (nx + 2 * s, ny - 2 * s)], close=True,
-                       dxfattribs={"layer": "粗实线"})
-    _t(msp, "N", (nx, ny - 0.2 * s), 3 * s,
-       align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题", tracker=tracker)
-
-    # ── 技术要求（内框左下） ──
+    # ── 附表（图例 / 技术要求 / 水力校验报告 / 指北针） ──
+    # 旧写法把这四块分别钉在初始图框（进程默认 A2）的右上、左上、左下、中下，
+    # 相距近整张图框宽高，内容包络被撑到 A1（主体只需 A2，实测虚涨 2.09 倍）。
+    # 改为贴着**主体包络**右侧竖排一列，自上而下累加。
     from . import draw_tech_notes
+    body = content_bbox(msp, exclude_annex=True)
+    col = AuxColumn(msp, body, s, gap=1500.0, tracker=tracker)
+    # 指北针占列表头（圆心贴主体右上角外侧，不上探到主体顶以上，避免又长高）
+    _nb = draw_north_arrow(msp, (col.x + 14 * s, body[3] - 14 * s), s,
+                           diameter=24.0, tracker=tracker)
+    col.top = _nb[1] - 1500.0
+    col.add(draw_legend, legend_items,
+            title="图  例", col_widths=(16, 28, 32), row_h=7.0, tracker=tracker)
     tech_notes = [
         "管材采用HDPE双壁波纹管，主管DN300、支管DN200，橡胶圈密封接口。",
         "管道坡度：主管≥0.3%、支管≥0.5%，坡向水流方向，严禁倒坡。",
@@ -424,9 +426,8 @@ def gen_t6(out_dir: str, scale: float = 200.0) -> str:
         "管道基础采用120°砂石基础，压实度≥95%。",
         "施工及验收执行GB 50268—2008。",
     ]
-    draw_tech_notes(msp, (x0 + 2 * s, y0 + 52 * s), s,
-                    "施工技术要求", tech_notes, width=86, line_h=6.0,
-                    tracker=tracker)
+    col.add(draw_tech_notes, "施工技术要求", tech_notes, width=86, line_h=6.0,
+            tracker=tracker)
 
     # ── 水力校验报告（内框中下，与技术要求并排） ──
     if verifier.risks:
@@ -443,8 +444,7 @@ def gen_t6(out_dir: str, scale: float = 200.0) -> str:
             "· J8(-1.870)高于市政接口(-2.200)0.33m≥0.3m。",
         ]
         report_title = "水力校验报告（通过）"
-    draw_tech_notes(msp, (x0 + 92 * s, y0 + 52 * s), s,
-                    report_title, lines, width=86, line_h=6.0,
-                    tracker=tracker)
+    col.add(draw_tech_notes, report_title, lines, width=86, line_h=6.0,
+            tracker=tracker)
 
     return save_dxf_autofit(doc, os.path.join(out_dir, "T6_污水自流管网平面布置图.dxf"), scale, info, tracker)

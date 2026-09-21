@@ -73,13 +73,20 @@ def gen_t1(out_dir: str, scale: float = 50.0,
     _t(msp, f"L={int(length)}mm", (midx, midy - 6 * scale), 3 * scale, layer="文字",
        tracker=tracker)
 
-    # 技术要求
-    draw_tech_notes(msp, (x1 - 90 * scale, y1 - 25 * scale), scale,
-                    "技术要求",
-                    ["管道为 DN300 铸铁管，承插接口，橡胶圈密封。",
-                     "管道坡度 0.4%，坡向水流方向，严禁倒坡。",
-                     "管内底标高单位为 m，管道中心线标注见纵断图。",
-                     "管道施工及验收执行 GB 50268—2008。"],
-                    tracker=tracker)
+    # 技术要求 —— 贴着**主体包络**右侧堆叠，不锚 refit 前的图框角点
+    # 旧写法 (x1-90*s, y1-25*s) 锚在 draw_frame 返回的初始图框（进程默认 A2）
+    # 右上角，主体（6m 管段，1:50 只有 120 图纸 mm）在左、附表在右，内容包络被
+    # 撑到近整张 A2 宽，最小可装幅面从 A4 被抬到 A2（实测虚涨 3.56 倍）。
+    from ..standards.frame import content_bbox
+    from ..standards.layout import AuxColumn
+    body = content_bbox(msp, exclude_annex=True)
+    col = AuxColumn(msp, body, scale, gap=1200.0, tracker=tracker)
+    col.add(draw_tech_notes,
+            "技术要求",
+            ["管道为 DN300 铸铁管，承插接口，橡胶圈密封。",
+             "管道坡度 0.4%，坡向水流方向，严禁倒坡。",
+             "管内底标高单位为 m，管道中心线标注见纵断图。",
+             "管道施工及验收执行 GB 50268—2008。"],
+            width=90.0, tracker=tracker)
 
     return save_dxf_autofit(doc, os.path.join(out_dir, "T1_污水管道标注图.dxf"), scale, info, tracker)
