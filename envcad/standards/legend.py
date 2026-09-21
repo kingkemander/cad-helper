@@ -48,14 +48,14 @@ def draw_legend(msp, origin, scale: float, items, title: str = "图  例",
     x0, y0 = ox, oy - total_h
     x1, y1 = ox + total_w, oy
     msp.add_lwpolyline([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], close=True,
-                       dxfattribs={"layer": "图框"})
+                       dxfattribs={"layer": "附表"})
     # 注册图例外框
     if tracker is not None:
         tracker.register(x0, y0, x1, y1, margin=100)
     # 标题行
     # 注：图例内部文字为表格单元格精确定位，不参与碰撞避让
     # （否则会被自身外框注册区顶出图框边界）；外框已注册，外部标注自会避让。
-    msp.add_line((x0, y1 - title_h), (x1, y1 - title_h), dxfattribs={"layer": "图框"})
+    msp.add_line((x0, y1 - title_h), (x1, y1 - title_h), dxfattribs={"layer": "附表"})
     _t(msp, title, ((x0 + x1) / 2, y1 - title_h / 2 + 0.5 * s), 3.5 * s,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题")
     # 列分隔
@@ -63,14 +63,14 @@ def draw_legend(msp, origin, scale: float, items, title: str = "图  例",
     col_x = [x0]
     for w in cw[:-1]:
         cx += w
-        msp.add_line((cx, y0), (cx, y1), dxfattribs={"layer": "图框"})
+        msp.add_line((cx, y0), (cx, y1), dxfattribs={"layer": "附表"})
         col_x.append(cx)
     col_x.append(x1)
     # 行
     for i, (kind, name, spec) in enumerate(items):
         ry = y1 - title_h - (i + 0.5) * rh
         if i > 0:
-            msp.add_line((x0, ry + rh / 2), (x1, ry + rh / 2), dxfattribs={"layer": "图框"})
+            msp.add_line((x0, ry + rh / 2), (x1, ry + rh / 2), dxfattribs={"layer": "附表"})
         # 符号区
         sym_cx = (col_x[0] + col_x[1]) / 2
         _draw_symbol(msp, kind, (sym_cx, ry), s)
@@ -454,4 +454,4 @@ def _draw_symbol(msp, kind: str, center, s):
                             (cx + L * 0.5, cy)],
                            close=True, dxfattribs={"layer": "阀门"})
     else:
-        msp.add_circle((cx, cy), L * 0.5, dxfattribs={"layer": "图框"})
+        msp.add_circle((cx, cy), L * 0.5, dxfattribs={"layer": "附表"})

@@ -424,16 +424,16 @@ def _sheet6_material(out_dir, scale):
         cx += cols[i]
 
     msp.add_lwpolyline([(ox, oy), (ox + total_w, oy), (ox + total_w, oy - title_h),
-                        (ox, oy - title_h)], close=True, dxfattribs={"layer": "图框"})
+                        (ox, oy - title_h)], close=True, dxfattribs={"layer": "附表"})
 
     for j in range(1, len(headers)):
         xx = ox + sum(cols[:j])
-        msp.add_line((xx, oy), (xx, oy - title_h - len(rows) * rh), dxfattribs={"layer": "图框"})
+        msp.add_line((xx, oy), (xx, oy - title_h - len(rows) * rh), dxfattribs={"layer": "附表"})
 
     # 数据行
     for r, row in enumerate(rows):
         ry = oy - title_h - r * rh
-        msp.add_line((ox, ry), (ox + total_w, ry), dxfattribs={"layer": "图框"})
+        msp.add_line((ox, ry), (ox + total_w, ry), dxfattribs={"layer": "附表"})
         cx = ox
         for i, val in enumerate(row):
             _t(msp, val, (cx + cols[i] / 2, ry - rh / 2 + 0.5 * s), 2.6 * s,
@@ -442,8 +442,8 @@ def _sheet6_material(out_dir, scale):
 
     # 底线
     bottom_y = oy - title_h - len(rows) * rh
-    msp.add_line((ox, bottom_y), (ox + total_w, bottom_y), dxfattribs={"layer": "图框"})
-    msp.add_line((ox, oy - title_h), (ox, oy - title_h - len(rows) * rh), dxfattribs={"layer": "图框"})
+    msp.add_line((ox, bottom_y), (ox + total_w, bottom_y), dxfattribs={"layer": "附表"})
+    msp.add_line((ox, oy - title_h), (ox, oy - title_h - len(rows) * rh), dxfattribs={"layer": "附表"})
 
     _t(msp, "设备材料表", (x0 + (x1 - x0) / 2, y0 + 5000), 5 * s,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题", tracker=tracker)

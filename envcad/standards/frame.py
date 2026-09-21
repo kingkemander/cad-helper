@@ -48,6 +48,19 @@ MARGIN_L = 25.0   # 装订边 a
 MARGIN_O = 10.0   # 其余边 c（A2 基准值）
 TITLE_W, TITLE_H = 180.0, 56.0  # 标题栏基准尺寸（× tb 缩放）
 
+# 幅面搜索顺序：由小到大，取第一个装得下的
+PAPER_ORDER = ("A4", "A3", "A2", "A1", "A0")
+
+# 内容与内框之间的最小留白（图纸 mm）
+PAD_PAPER_MM = 6.0
+
+# 附表图层：技术要求框 / 技术特性表 / 设备材料表 / 图例框。
+# 与"图框"层分开：图框是幅面边界（出图前会重选重画），附表是内容的一部分。
+AUX_LAYER = "附表"
+
+# 图幅家具层：图幅边界 + 标题栏。出图前整层删除重画，且不计入内容外包络。
+SHEET_LAYERS = ("图框", "标题栏")
+
 # ── 优先从本地标准知识库补齐留边（GB/T 14689）──
 _KB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)),
                         "standards_kb.json")
@@ -137,153 +150,295 @@ class FrameInfo:
     date: str = "2026.07"
     size: str = None        # 图幅：A0~A4；None=进程级默认（默认 A2）
     orientation: str = None  # 方向：landscape 横式 / portrait 纵式；None=默认
+    overflow_mm: float = 0.0  # 出图自检：内容超出内框的量（mm），0=未超出
 
 
-def draw_frame(doc, scale: float, info: FrameInfo, tracker=None):
+def draw_frame(doc, scale: float, info: FrameInfo, tracker=None, origin=(0.0, 0.0)):
     """绘制国标图框 + 标题栏，返回内框范围 (x0,y0,x1,y1)（实物坐标系）。
 
     v1.5: 图幅由 ``info.size`` / ``info.orientation`` 或进程级默认
     （``set_default_paper_size`` / ``set_default_orientation``）决定，
     默认 A2 横式，向后兼容。
+    v1.6: 新增 ``origin`` —— 图框整体平移量。出图前按内容重选幅面时，
+    把图框摆到内容外侧即可，内容坐标无需改动。
     """
     msp = doc.modelspace()
     W, H, tb, s = _resolve_sheet(info.size, info.orientation)
     W, H = W * scale, H * scale
     a, c = MARGIN.get(s, (MARGIN_L, MARGIN_O))
     ml, mo = a * scale, c * scale
+    ox, oy = origin
+
+    def _P(x, y):
+        return (x + ox, y + oy)
+
     # 外框（图幅边界，细实线）
-    msp.add_lwpolyline([(0, 0), (W, 0), (W, H), (0, H)], close=True,
+    msp.add_lwpolyline([_P(0, 0), _P(W, 0), _P(W, H), _P(0, H)], close=True,
                        dxfattribs={"layer": "图框"})
     # 内框（图框线，粗实线）
     x0, y0 = ml, mo
     x1, y1 = W - mo, H - mo
-    msp.add_lwpolyline([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], close=True,
+    msp.add_lwpolyline([_P(x0, y0), _P(x1, y0), _P(x1, y1), _P(x0, y1)], close=True,
                        dxfattribs={"layer": "图框"})
     # 对中标志（四边中点小三角，可选，便于折叠定位）
-    _center_marks(msp, x0, y0, x1, y1, scale)
+    _center_marks(msp, x0 + ox, y0 + oy, x1 + ox, y1 + oy, scale)
     # 标题栏（右下角，向左上展开）；随图幅缩放系数 tb 等比放大
-    _draw_title_block(msp, x1, y0, scale, info, tracker, tb)
+    _draw_title_block(msp, x1 + ox, y0 + oy, scale, info, tracker, tb)
     # 注册图框边距区域（仅四周留白，不占绘图区，避免假碰撞）
     if tracker is not None:
         # 左装订边、右/上/下留白边
-        tracker.register(0, 0, ml, H, margin=50)            # 左边距
-        tracker.register(W - mo, 0, W, H, margin=50)        # 右边距
-        tracker.register(ml, H - mo, W - mo, H, margin=50)  # 上边距
-        tracker.register(ml, 0, W - mo, mo, margin=50)      # 下边距
+        tracker.register(ox, oy, ox + ml, oy + H, margin=50)              # 左边距
+        tracker.register(ox + W - mo, oy, ox + W, oy + H, margin=50)      # 右边距
+        tracker.register(ox + ml, oy + H - mo, ox + W - mo, oy + H, margin=50)  # 上边距
+        tracker.register(ox + ml, oy, ox + W - mo, oy + mo, margin=50)    # 下边距
+    return (x0 + ox, y0 + oy, x1 + ox, y1 + oy)
+
+
+def _sheet_inner(size, orientation, scale):
+    """返回 (W, H, tb, inner)：图幅实际尺寸、标题栏缩放系数、内框坐标。
+
+    W/H 已乘 scale；inner=(ix0,iy0,ix1,iy1)。留边按 GB/T 14689 逐幅面取值
+    （a=25；c：A0/A1/A2=10，A3/A4=5）。
+    """
+    long_, short_ = PAPER_BASE[size]
+    if (orientation or "landscape").lower() == "portrait":
+        W, H = short_ * scale, long_ * scale
+    else:
+        W, H = long_ * scale, short_ * scale
+    a, c = MARGIN.get(size, (MARGIN_L, MARGIN_O))
+    tb = TITLE_SCALE.get(size, 1.0)
+    inner = (a * scale, c * scale, W - c * scale, H - c * scale)
+    return W, H, tb, inner
+
+
+def _title_block_size(size, scale):
+    """标题栏 (宽, 高)：180×56 mm，按 scale 与幅面系数 tb 等比放大。"""
+    ts = scale * TITLE_SCALE.get(size, 1.0)
+    return TITLE_W * ts, TITLE_H * ts
+
+
+def _title_block_rect(size, scale, inner):
+    """标题栏矩形（贴内框右下角）。"""
+    tw, th = _title_block_size(size, scale)
+    _ix0, iy0, ix1, _iy1 = inner
+    return (ix1 - tw, iy0, ix1, iy0 + th)
+
+
+def _text_extent(e):
+    """TEXT/MTEXT 的真实包围盒（按字宽估算）。
+
+    旧实现只取插入点，长文字伸出图框也不会被发现；这里按 halign/valign
+    还原对齐方式后估算范围，宁可略大不可偏小。
+    """
+    from .annotate import _estimate_text_width
+    t = e.dxftype()
+    if t == "TEXT":
+        content, h, ip = e.dxf.text, float(e.dxf.height), e.dxf.insert
+        halign = int(getattr(e.dxf, "halign", 0) or 0)
+        valign = int(getattr(e.dxf, "valign", 0) or 0)
+    else:  # MTEXT
+        content, h, ip = e.text, float(e.dxf.char_height), e.dxf.insert
+        halign = int(getattr(e.dxf, "attachment_point", 1) or 1)
+        valign = 2 if halign in (1, 2, 3) else 3
+        halign = 1 if halign in (1, 2, 3) else 0
+    w = _estimate_text_width(str(content), h)
+    th = h * 1.6
+    if halign == 1:      # 中
+        x0, x1 = ip.x - w / 2, ip.x + w / 2
+    elif halign == 2:    # 右
+        x0, x1 = ip.x - w, ip.x
+    else:                # 左
+        x0, x1 = ip.x, ip.x + w
+    if valign == 2:      # 中
+        y0, y1 = ip.y - th / 2, ip.y + th / 2
+    elif valign == 3:    # 上
+        y0, y1 = ip.y - th, ip.y
+    else:                # 基线/底
+        y0, y1 = ip.y, ip.y + th
     return (x0, y0, x1, y1)
 
 
-def draw_frame_at(doc, scale, info, bbox, tracker=None):
-    """在已有内容的外包络 bbox=(xmin,ymin,xmax,ymax) 之外绘制国标图框 + 标题栏。
-
-    用于标注/一键出图等“内容坐标已固定、无法整体平移”的场景：图框直接包住
-    内容，标题栏固定在内容外包络的右下角。bbox 为内容实物坐标（未乘 scale）。
-    返回图框外边范围 (fx0,fy0,fx1,fy1)。
-    """
-    msp = doc.modelspace()
-    s = scale
-    xmin, ymin, xmax, ymax = bbox
-    # 留白：装订边 a=25（左），其余边 c=10（按 A2 基准统一留白）
-    a = 25.0 * s
-    c = 10.0 * s
-    fx0, fy0 = xmin - a, ymin - c
-    fx1, fy1 = xmax + c, ymax + c
-    # 外框
-    msp.add_lwpolyline([(fx0, fy0), (fx1, fy0), (fx1, fy1), (fx0, fy1)],
-                       close=True, dxfattribs={"layer": "图框"})
-    # 内框（粗实线）
-    ix0, iy0 = fx0 + a, fy0 + c
-    ix1, iy1 = fx1 - c, fy1 - c
-    msp.add_lwpolyline([(ix0, iy0), (ix1, iy0), (ix1, iy1), (ix0, iy1)],
-                       close=True, dxfattribs={"layer": "图框"})
-    _center_marks(msp, ix0, iy0, ix1, iy1, s)
-    # 标题栏：固定在内容外包络右下角（fx1, fy0 处）
-    _draw_title_block(msp, fx1, fy0, s, info, tracker, 1.0)
-    if tracker is not None:
-        tracker.register(fx0, fy0, fx0 + a, fy1, margin=50)
-        tracker.register(fx1 - c, fy0, fx1, fy1, margin=50)
-        tracker.register(ix0, fy1 - c, ix1, fy1, margin=50)
-        tracker.register(ix0, fy0, ix1, fy0 + c, margin=50)
-    # 选幅面（仅用于信息标注，不改绘制）
-    return (fx0, fy0, fx1, fy1)
+def _entity_extent(e):
+    """单实体包围盒 (x0,y0,x1,y1)；不可测量时返回 None。"""
+    t = e.dxftype()
+    if t in ("TEXT", "MTEXT"):
+        try:
+            return _text_extent(e)
+        except Exception:
+            pass
+    try:
+        if t == "LWPOLYLINE":
+            pts = list(e.get_points("xy"))
+            if pts:
+                xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+                return (min(xs), min(ys), max(xs), max(ys))
+        elif t == "LINE":
+            return (min(e.dxf.start.x, e.dxf.end.x), min(e.dxf.start.y, e.dxf.end.y),
+                    max(e.dxf.start.x, e.dxf.end.x), max(e.dxf.start.y, e.dxf.end.y))
+        elif t in ("ARC", "CIRCLE"):
+            c, r = e.dxf.center, e.dxf.radius
+            return (c.x - r, c.y - r, c.x + r, c.y + r)
+        b = e.bbox()
+        if b:
+            return (b.extmin.x, b.extmin.y, b.extmax.x, b.extmax.y)
+    except Exception:
+        pass
+    try:
+        ip = e.dxf.insert
+        return (ip.x, ip.y, ip.x, ip.y)
+    except Exception:
+        return None
 
 
-def _content_bbox(msp, scale):
-    """扫描模型空间所有实体，返回内容外包络 (xmin,ymin,xmax,ymax)。
+def _content_bbox(msp, scale=1.0):
+    """内容外包络 (xmin,ymin,xmax,ymax)。
 
-    忽略已存在的图框图层实体（避免"旧框"被当成内容）。MTEXT/INSERT 等
-    bbox 不稳定时退而取插入点；圆/弧取外接矩形。
+    只排除图框层与标题栏层（标准幅面边界 + 标题栏，出图前会按内容重选并重画）。
+    ``附表`` 层（技术要求框/表格/图例框）属内容，必须计入——否则它们会被
+    图框切掉，这正是旧版"框线贴边/内容出框"的成因。
     """
     xmin = ymin = 1e18
     xmax = ymax = -1e18
     for e in list(msp):
-        if e.dxf.layer == "图框":
+        if e.dxf.layer in SHEET_LAYERS:
             continue
-        t = e.dxftype()
-        try:
-            if t == "LWPOLYLINE":
-                for x, y in e.get_points("xy"):
-                    xmin, ymin, xmax, ymax = min(xmin, x), min(ymin, y), max(xmax, x), max(ymax, y)
-            elif t == "LINE":
-                for x, y in [(e.dxf.start.x, e.dxf.start.y), (e.dxf.end.x, e.dxf.end.y)]:
-                    xmin, ymin, xmax, ymax = min(xmin, x), min(ymin, y), max(xmax, x), max(ymax, y)
-            elif t in ("ARC", "CIRCLE"):
-                c, r = e.dxf.center, e.dxf.radius
-                xmin, ymin = min(xmin, c.x - r), min(ymin, c.y - r)
-                xmax, ymax = max(xmax, c.x + r), max(ymax, c.y + r)
-            elif t in ("TEXT", "MTEXT", "INSERT", "ATTDEF"):
-                ip = e.dxf.insert
-                xmin, ymin = min(xmin, ip.x), min(ymin, ip.y)
-                xmax, ymax = max(xmax, ip.x), max(ymax, ip.y)
-            else:
-                b = e.bbox()
-                if b:
-                    xmin, ymin = min(xmin, b.extmin.x), min(ymin, b.extmin.y)
-                    xmax, ymax = max(xmax, b.extmax.x), max(ymax, b.extmax.y)
-        except Exception:
+        b = _entity_extent(e)
+        if b is None:
             continue
+        xmin, ymin = min(xmin, b[0]), min(ymin, b[1])
+        xmax, ymax = max(xmax, b[2]), max(ymax, b[3])
     if xmax < xmin or ymax < ymin:
         return (0.0, 0.0, 1.0, 1.0)
     return (xmin, ymin, xmax, ymax)
 
 
-def choose_paper_for_content(bbox, scale, orientation="landscape"):
-    """按内容外包络选能装下的最小标准幅面。
+def _page_fit(size, orientation, scale, bbox, reserve_title=True):
+    """内容外包络（允许平移摆放）能否装进该幅面内框。"""
+    inner = _sheet_inner(size, orientation, scale)[3]
+    pad = PAD_PAPER_MM * scale
+    avail_w = (inner[2] - inner[0]) - 2 * pad
+    avail_h = (inner[3] - inner[1]) - 2 * pad
+    if reserve_title:
+        avail_h -= _title_block_size(size, scale)[1]
+    return (bbox[2] - bbox[0]) <= avail_w and (bbox[3] - bbox[1]) <= avail_h
 
-    先试给定方向，放不下再试另一方向，再不行就 A0（超大内容仍包住）。
-    返回 (size, orientation)。
+
+def _page_for_content(bbox, scale, orientation="landscape"):
+    """选幅面：先按"给标题栏让位"选，实在放不下再按"仅须装进内框"选。
+
+    返回 (size, orientation, reserved)；reserved=True 表示已为标题栏留位。
     """
-    xmin, ymin, xmax, ymax = bbox
-    cw = (xmax - xmin) + 35.0 * scale   # 左右留白 a+c
-    ch = (ymax - ymin) + 20.0 * scale   # 上下留白 c+c
-    for o in ([orientation] if orientation else ["landscape", "portrait"]):
-        for sz in ("A4", "A3", "A2", "A1", "A0"):
-            long, short = PAPER_BASE[sz]
-            W, H = (long, short) if o == "landscape" else (short, long)
-            if cw <= W * scale and ch <= H * scale:
-                return sz, o
-    return "A0", orientation or "landscape"
+    orders = ["landscape", "portrait"] if not orientation else [orientation]
+    for reserved in (True, False):
+        for o in orders:
+            for sz in PAPER_ORDER:
+                if _page_fit(sz, o, scale, bbox, reserved):
+                    return sz, o, reserved
+    return "A0", (orientation or "landscape"), False
+
+
+def choose_paper_for_content(bbox, scale, orientation="landscape"):
+    """按内容外包络选能装下的最小标准幅面，返回 (size, orientation)。"""
+    sz, o, _res = _page_for_content(bbox, scale, orientation)
+    return sz, o
+
+
+def _place_origin(bbox, size, orientation, scale, reserved):
+    """算出图框原点：让内容在"可用绘图区"内居中。
+
+    可用绘图区 = 内框去掉四周留白，若给标题栏让位则再抬掉底部标题栏高度。
+    这里**只移动图框，不平移内容**：图框坐标本身没有语义，摆放自由；
+    内容不动可避免 MTEXT/INSERT 平移错位，也保证后续追加的实体
+    （如一键标注流程里后加的 GD&T 符号）仍落在原坐标上。
+    """
+    inner = _sheet_inner(size, orientation, scale)[3]
+    pad = PAD_PAPER_MM * scale
+    tb_h = _title_block_size(size, scale)[1] if reserved else 0.0
+    ux0, uy0 = inner[0] + pad, inner[1] + tb_h + pad
+    ux1, uy1 = inner[2] - pad, inner[3] - pad
+    cx, cy = (ux0 + ux1) / 2, (uy0 + uy1) / 2
+    bcx, bcy = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+    # 图框原点 = 内容中心 − 可用区中心（把可用区中心搬到内容中心上）
+    ox = bcx - cx
+    oy = bcy - cy
+    return (ox, oy)
+
+
+def _erase_layer(msp, layer):
+    """删除某图层上的全部实体，返回删除数量。"""
+    n = 0
+    for e in list(msp):
+        try:
+            if e.dxf.layer == layer:
+                msp.delete_entity(e)
+                n += 1
+        except Exception:
+            continue
+    return n
+
+
+def _erase_sheet(msp):
+    """删除图幅家具层（图框 + 标题栏），出图前重画。"""
+    return sum(_erase_layer(msp, L) for L in SHEET_LAYERS)
+
+
+def _overflow(bbox, size, orientation, scale, origin):
+    """内容相对内框的超出量（>0 = 压框；含标题栏占位）。"""
+    inner = _sheet_inner(size, orientation, scale)[3]
+    ox, oy = origin
+    ix0, iy0 = inner[0] + ox, inner[1] + oy
+    ix1, iy1 = inner[2] + ox, inner[3] + oy
+    return max(ix0 - bbox[0], iy0 - bbox[1], bbox[2] - ix1, bbox[3] - iy1)
+
+
+def _report(size, o, reserved, overflow_px, scale):
+    """出图自检信息（供 CLI 提示与出图方核对）。"""
+    return {
+        "size": size,
+        "orientation": o,
+        "title_reserved": reserved,
+        "overflow_mm": round(max(0.0, overflow_px) / (scale or 1.0), 1),
+    }
+
+
+def draw_frame_at(doc, scale, info, bbox, tracker=None):
+    """按内容外包络选标准幅面，并把图框摆到内容外侧后绘制。
+
+    v1.6：不再"把图框贴着内容画"。旧做法得到的是非标准幅面（长宽比不是
+    A 系列的 √2），标题栏声明的比例尺随之失真——实测 T4-02 标 1:100
+    实为 1:47、T6 标 1:200 实为 1:99。现在改为：按内容选最小标准幅面，
+    图框整体平移到内容外侧；内容坐标不动。
+    返回内框范围 (x0, y0, x1, y1)。
+    """
+    size, o, reserved = _page_for_content(
+        bbox, scale, (info.orientation or _DEFAULT_ORIENTATION))
+    info.size, info.orientation = size, o
+    origin = _place_origin(bbox, size, o, scale, reserved)
+    r = _report(size, o, reserved, _overflow(bbox, size, o, scale, origin), scale)
+    info.overflow_mm = r["overflow_mm"]
+    return draw_frame(doc, scale, info, tracker=tracker, origin=origin)
 
 
 def refit_frame(doc, scale, info, tracker=None, orientation=None):
-    """在保存前调用：量实际内容，若原图框（或默认幅面）装不下则重选幅面并覆画图框。
+    """保存前调用：按内容重选标准幅面并重画图框（内容坐标不动）。
 
-    不改变任何内容坐标——图框直接包住内容（与 draw_frame_at 一致）。
-    返回最终采用的 (size, orientation)。
+    v1.6：图幅、比例尺、留边、标题栏四者一致；图幅恒为标准 GB/T 14689
+    幅面。A0 仍装不下时保留 A0，并把超出量写进 ``info.overflow_mm``。
+    返回 (size, orientation)。
     """
     msp = doc.modelspace()
     bbox = _content_bbox(msp, scale)
-    size, o = choose_paper_for_content(bbox, scale, orientation or info.orientation or _DEFAULT_ORIENTATION)
-    # 移除旧图框（若存在）
-    old = [e for e in list(msp) if e.dxf.layer == "图框"]
-    for e in old:
-        try:
-            msp.delete_entity(e)
-        except Exception:
-            pass
-    info.size = size
-    info.orientation = o
-    draw_frame_at(doc, scale, info, bbox, tracker)
+    want = orientation or info.orientation or _DEFAULT_ORIENTATION
+    size, o, reserved = _page_for_content(bbox, scale, want)
+    info.size, info.orientation = size, o
+    origin = _place_origin(bbox, size, o, scale, reserved)
+    _erase_sheet(msp)
+    x0, y0, x1, y1 = draw_frame(doc, scale, info, tracker=tracker, origin=origin)
+    r = _report(size, o, reserved, _overflow(bbox, size, o, scale, origin), scale)
+    info.overflow_mm = r["overflow_mm"]
+    if not reserved or info.overflow_mm > 0:
+        print(f"  [图幅] {size}-{o}：内容超出内框 {info.overflow_mm:.0f}mm(纸面)，"
+              f"建议加大比例尺分母或采用加长幅面")
     return size, o
 
 
@@ -316,9 +471,12 @@ def _draw_title_block(msp, rx, by, s, info: FrameInfo, tracker=None, tb: float =
     ts = s * tb
     tw, th = TITLE_W * ts, TITLE_H * ts
     lx, ty = rx - tw, by + th  # 左上角
+    # 标题栏整体（框线 + 分格 + 文字）独占"标题栏"层：
+    # 出图前要按内容重选幅面重画图框，整层删除才能保证不留残影。
+    LB = "标题栏"
     # 外框（粗实线）
     msp.add_lwpolyline([(lx, by), (rx, by), (rx, ty), (lx, ty)], close=True,
-                       dxfattribs={"layer": "图框"})
+                       dxfattribs={"layer": LB})
     # 注册标题栏区域
     if tracker is not None:
         tracker.register(lx, by, rx, ty, margin=50)
@@ -329,46 +487,46 @@ def _draw_title_block(msp, rx, by, s, info: FrameInfo, tracker=None, tb: float =
     c3 = lx + 160 * ts     # 单位 | 比例图号
     hmid = by + 28 * ts    # 上下分界
     for x in (c1, c2, c3):
-        msp.add_line((x, by), (x, ty), dxfattribs={"layer": "图框"})
-    msp.add_line((lx, hmid), (c1, hmid), dxfattribs={"layer": "图框"})
+        msp.add_line((x, by), (x, ty), dxfattribs={"layer": LB})
+    msp.add_line((lx, hmid), (c1, hmid), dxfattribs={"layer": LB})
     # 比例/图号 上下分界
-    msp.add_line((c3, by + 14 * ts), (rx, by + 14 * ts), dxfattribs={"layer": "图框"})
+    msp.add_line((c3, by + 14 * ts), (rx, by + 14 * ts), dxfattribs={"layer": LB})
     # 签字区三行（上半格 28~56 内均分，与签字文字行对应）
     for i in (1, 2):
         y = by + (28 + 28 / 3 * i) * ts
-        msp.add_line((c1, y), (c2, y), dxfattribs={"layer": "图框"})
+        msp.add_line((c1, y), (c2, y), dxfattribs={"layer": LB})
 
     # —— 文字 ——
     H = ts  # 字高基数（随图幅缩放）
     # 图名（大字，居中，上半格 28~56）
     _text(msp, info.title, ((lx + c1) / 2, by + 42 * ts), 5 * H,
-          align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
+          align=TextEntityAlignment.MIDDLE_CENTER, layer=LB,
           tracker=tracker)
     # 项目名（下半格 0~28 居中）
     _text(msp, info.project, ((lx + c1) / 2, by + 14 * ts), 3 * H,
-          align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
+          align=TextEntityAlignment.MIDDLE_CENTER, layer=LB,
           tracker=tracker)
     # 签字三行
     rows = [("设计", info.designer), ("校核", info.checker), ("审核", info.auditor)]
     rh = 28 / 3 * ts
     for i, (lbl, name) in enumerate(rows):
         cy = by + th - rh * (i + 0.5)
-        _text(msp, lbl, (c1 + 4 * ts, cy), 2.5 * H, layer="文字", tracker=tracker)
-        _text(msp, name, (c1 + 14 * ts, cy), 2.5 * H, layer="文字", tracker=tracker)
+        _text(msp, lbl, (c1 + 4 * ts, cy), 2.5 * H, layer=LB, tracker=tracker)
+        _text(msp, name, (c1 + 14 * ts, cy), 2.5 * H, layer=LB, tracker=tracker)
     # 单位
     _text(msp, info.unit, ((c2 + c3) / 2, (by + ty) / 2), 2.8 * H,
-          align=TextEntityAlignment.MIDDLE_CENTER, layer="文字", tracker=tracker)
+          align=TextEntityAlignment.MIDDLE_CENTER, layer=LB, tracker=tracker)
     # 比例
-    _text(msp, "比例", (c3 + 2 * ts, by + 21 * ts), 2.2 * H, layer="文字", tracker=tracker)
+    _text(msp, "比例", (c3 + 2 * ts, by + 21 * ts), 2.2 * H, layer=LB, tracker=tracker)
     _text(msp, info.scale_str, ((c3 + rx) / 2, by + 18 * ts), 3 * H,
-          align=TextEntityAlignment.MIDDLE_CENTER, layer="文字", tracker=tracker)
+          align=TextEntityAlignment.MIDDLE_CENTER, layer=LB, tracker=tracker)
     # 图号
-    _text(msp, "图号", (c3 + 2 * ts, by + 7 * ts), 2.2 * H, layer="文字", tracker=tracker)
+    _text(msp, "图号", (c3 + 2 * ts, by + 7 * ts), 2.2 * H, layer=LB, tracker=tracker)
     _text(msp, info.drawing_no, ((c3 + rx) / 2, by + 4 * ts), 3 * H,
-          align=TextEntityAlignment.MIDDLE_CENTER, layer="文字", tracker=tracker)
+          align=TextEntityAlignment.MIDDLE_CENTER, layer=LB, tracker=tracker)
     # 日期（下半格 0~28 居中，签字区下方）
     _text(msp, info.date, ((c1 + c2) / 2, by + 14 * ts), 2.5 * H,
-          align=TextEntityAlignment.MIDDLE_CENTER, layer="文字", tracker=tracker)
+          align=TextEntityAlignment.MIDDLE_CENTER, layer=LB, tracker=tracker)
 
 
 def _text(msp, content, point, height, align=TextEntityAlignment.LEFT, layer="文字",

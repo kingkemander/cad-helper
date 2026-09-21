@@ -23,20 +23,19 @@ def draw_tech_notes(msp, origin, scale: float, title: str, notes: list,
     x0, y0 = ox, oy - total_h
     x1, y1 = ox + w, oy
     msp.add_lwpolyline([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], close=True,
-                       dxfattribs={"layer": "图框"})
-    # 标题
-    msp.add_line((x0, y1 - title_h), (x1, y1 - title_h), dxfattribs={"layer": "图框"})
-    _t(msp, title, ((x0 + x1) / 2, y1 - title_h / 2 + 0.5 * s), 3.5 * s,
-       align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
-       tracker=tracker)
-    # 注册外框占用
+                       dxfattribs={"layer": "附表"})
+    # 注册外框占用（供外部标注避让）
     if tracker is not None:
         tracker.register(x0, y0, x1, y1, margin=50)
-    # 条目
+    # 标题 + 条目
+    # 注：框内文字为框内精确定位，不参与碰撞避让
+    # （否则会被自身外框注册区顶出框外，导致错行）；外框已注册，外部标注自会避让。
+    msp.add_line((x0, y1 - title_h), (x1, y1 - title_h), dxfattribs={"layer": "附表"})
+    _t(msp, title, ((x0 + x1) / 2, y1 - title_h / 2 + 0.5 * s), 3.5 * s,
+       align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题")
     for i, note in enumerate(notes):
         ry = y1 - title_h - (i + 0.5) * rh
-        _t(msp, f"{i+1}. {note}", (x0 + 2 * s, ry + 0.5 * s), 2.5 * s, layer="文字",
-           tracker=tracker)
+        _t(msp, f"{i+1}. {note}", (x0 + 2 * s, ry + 0.5 * s), 2.5 * s, layer="文字")
     return (x0, y0, x1, y1)
 
 
@@ -69,22 +68,22 @@ def draw_spec_table(msp, origin, scale: float, title: str, rows: list,
            layer="文字-标题", tracker=tracker)
         cx += cols[i]
     msp.add_lwpolyline([(ox - total_w, y), (ox, y), (ox, y - th), (ox - total_w, y - th)],
-                       close=True, dxfattribs={"layer": "图框"})
+                       close=True, dxfattribs={"layer": "附表"})
     for j in range(1, len(headers)):
         xx = ox - total_w + sum(cols[:j])
-        msp.add_line((xx, y), (xx, y - th - n * rh), dxfattribs={"layer": "图框"})
+        msp.add_line((xx, y), (xx, y - th - n * rh), dxfattribs={"layer": "附表"})
     for r, row in enumerate(rows):
         ry = y - th - r * rh
-        msp.add_line((ox - total_w, ry), (ox, ry), dxfattribs={"layer": "图框"})
+        msp.add_line((ox - total_w, ry), (ox, ry), dxfattribs={"layer": "附表"})
         cx = ox - total_w
         for i, val in enumerate(row):
             _t(msp, val, (cx + cols[i] / 2, ry - rh / 2 + 0.5 * s), 2.4 * s,
                align=_MC, layer="文字", tracker=tracker)
             cx += cols[i]
     yb = y - th - n * rh
-    msp.add_line((ox - total_w, yb), (ox, yb), dxfattribs={"layer": "图框"})
-    msp.add_line((ox - total_w, y - th), (ox - total_w, yb), dxfattribs={"layer": "图框"})
-    msp.add_line((ox, y - th), (ox, yb), dxfattribs={"layer": "图框"})
+    msp.add_line((ox - total_w, yb), (ox, yb), dxfattribs={"layer": "附表"})
+    msp.add_line((ox - total_w, y - th), (ox - total_w, yb), dxfattribs={"layer": "附表"})
+    msp.add_line((ox, y - th), (ox, yb), dxfattribs={"layer": "附表"})
 
 
 def draw_material_table(msp, origin, scale: float, rows: list, tracker=None):
@@ -103,19 +102,19 @@ def draw_material_table(msp, origin, scale: float, rows: list, tracker=None):
            layer="文字-标题", tracker=tracker)
         cx += cols[i]
     msp.add_lwpolyline([(ox, oy), (ox + total_w, oy), (ox + total_w, oy - th),
-                        (ox, oy - th)], close=True, dxfattribs={"layer": "图框"})
+                        (ox, oy - th)], close=True, dxfattribs={"layer": "附表"})
     for j in range(1, len(headers)):
         xx = ox + sum(cols[:j])
-        msp.add_line((xx, oy), (xx, oy - th - n * rh), dxfattribs={"layer": "图框"})
+        msp.add_line((xx, oy), (xx, oy - th - n * rh), dxfattribs={"layer": "附表"})
     for r, row in enumerate(rows):
         ry = oy - th - r * rh
-        msp.add_line((ox, ry), (ox + total_w, ry), dxfattribs={"layer": "图框"})
+        msp.add_line((ox, ry), (ox + total_w, ry), dxfattribs={"layer": "附表"})
         cx = ox
         for i, val in enumerate(row):
             _t(msp, val, (cx + cols[i] / 2, ry - rh / 2 + 0.5 * s), 2.4 * s,
                align=_MC, layer="文字", tracker=tracker)
             cx += cols[i]
     yb = oy - th - n * rh
-    msp.add_line((ox, yb), (ox + total_w, yb), dxfattribs={"layer": "图框"})
-    msp.add_line((ox, oy - th), (ox, yb), dxfattribs={"layer": "图框"})
-    msp.add_line((ox + total_w, oy - th), (ox + total_w, yb), dxfattribs={"layer": "图框"})
+    msp.add_line((ox, yb), (ox + total_w, yb), dxfattribs={"layer": "附表"})
+    msp.add_line((ox, oy - th), (ox, yb), dxfattribs={"layer": "附表"})
+    msp.add_line((ox + total_w, oy - th), (ox + total_w, yb), dxfattribs={"layer": "附表"})
