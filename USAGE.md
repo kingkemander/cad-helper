@@ -27,7 +27,7 @@ v1.5 在原有6个领域基础上新增4个领域模块 + 1个非标兜底模块
 ### 1. 查看所有可用领域
 
 ```bash
-cd C:\Users\lenovo\Desktop\凹凸cad小助手（二集）v1.5
+cd cad-helper          # 本仓库根目录（换成你 clone 时的目录名）
 python -m envcad.cli list
 ```
 
@@ -273,9 +273,6 @@ python -m envcad.cli batch --config my_project.json --out D:\项目图纸
 ## 六、Python API 直接调用
 
 ```python
-import sys
-sys.path.insert(0, r"C:\Users\lenovo\Desktop\凹凸cad小助手（二集）v1.5")
-
 from envcad.engine.dxf_base import new_drawing, save_dxf
 from envcad.standards.solid_waste import draw_landfill_section
 
@@ -302,7 +299,7 @@ save_dxf(doc, r"D:\输出\填埋场.dxf")
 ## 七、文件结构
 
 ```
-凹凸cad小助手（二集）v1.5/
+cad-helper/
 ├── envcad/
 │   ├── __init__.py              # 包入口（v1.5）
 │   ├── cli.py                   # 命令行（list/batch/domain/test）

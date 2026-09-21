@@ -307,7 +307,7 @@ def example_env_tank():
 # 测试运行
 # ============================================================
 if __name__ == '__main__':
-    out_dir = Path(r'C:\Users\lenovo\Desktop\envcad-output\pro_dim_examples')
+    out_dir = Path.home() / "Desktop" / "envcad-output" / "pro_dim_examples"
     out_dir.mkdir(parents=True, exist_ok=True)
     
     print("生成各行业专业标注示例...")

@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 from typing import Iterable, Sequence, Tuple
 
 # ── envcad 包引导（只读引用，不改动源包） ────────────────────
-ENVCAD_ROOT = os.environ.get(
-    "ENVCAD_ROOT",
-    r"C:\Users\lenovo\Desktop\凹凸cad小助手（二集）v1.5",
-)
+# 源码根目录由本文件位置推导（envcad/standards/<domain>/_common.py 上溯 3 层），
+# 不写死任何机器的绝对路径。需要时可用 ENVCAD_ROOT 环境变量覆盖。
+ENVCAD_ROOT = os.environ.get("ENVCAD_ROOT") or str(Path(__file__).resolve().parents[3])
 if ENVCAD_ROOT not in sys.path:
     sys.path.insert(0, ENVCAD_ROOT)
 

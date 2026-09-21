@@ -4,11 +4,12 @@
 
 ## 开发环境
 
-```powershell
-cd 凹凸cad小助手（二集）v1.5
-python -m venv .venv && .venv\Scripts\Activate.ps1
-pip install -e ".[all]"      # 全套：ezdxf + pywin32(COM桥接) + openpyxl/python-docx(文档)
-pytest -q                    # 跑测试（CAD 相关用例在非 Windows 下自动 skip）
+```bash
+cd cad-helper                         # 换成你 clone 时的目录名
+python -m venv .venv
+source .venv/bin/activate             # Windows: .venv\Scripts\Activate.ps1
+pip install -e ".[doc]"               # macOS/Linux 用 [doc]；Windows 可用 "[all]"
+pytest -q                             # 跑测试（CAD 相关用例在非 Windows 下自动 skip）
 ```
 
 ## 目录约定

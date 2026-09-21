@@ -3,7 +3,7 @@ name: envcad
 description: "跨行业国标工程制图 CAD 技能：基于 ezdxf 生成符合 GB 国标（GB/T 17450、GB/T 50001、GB/T 1182、GB/T 324、GB 50010 等）的 DXF 工程图，覆盖建筑/土木/结构/桥梁/基础/机械/环保(水处理·大气·固废·环评)/电气/给排水/暖通/液压/P&ID/农业食品/电子半导体/能源化工/测绘GIS 等 16+ 行业，含 GD&T 形位公差、焊接符号、表面粗糙度、BOM、剖面、钢筋、图纸模板、修订标记等标准标注，并可通过 COM 桥接推送 AutoCAD/ZWCAD。当用户要求生成 CAD 图纸、画工程图、出 DXF、标注形位公差/焊接/粗糙度、材料明细表、污水处理/沉淀池/管网平剖面图、液压原理图、电气控制图、给排水/暖通图、P&ID 流程图，或推送到 AutoCAD 时使用。Use when the user asks to generate CAD drawings, DXF files, engineering blueprints, piping/sedimentation tank/WWTP drawings, GD&T/weld/roughness symbols, BOM, HVAC/electrical/plumbing/P&ID diagrams, or push to AutoCAD."
 version: "1.5"
 license: MIT
-homepage: https://gitee.com/Funkidragon99/cad1.0
+homepage: https://github.com/kingkemander/cad-helper
 author: CAD助手
 ---
 
@@ -23,11 +23,11 @@ envcad 是**跨行业工程制图** CAD 插件。覆盖 16+ 行业，90+ 标准�
 
 **版本区分（重要）**：
 
-| 版本 | 路径 | 定位 |
+| 版本 | 位置 | 定位 |
 |------|------|------|
-| **二集版 v1.5** (本 Skill) | `桌面\凹凸cad小助手（二集）v1.5` | 二集版：text-to-cad + multiCAD-mcp + 国标规范 + 行业标注，MIT 许可证 |
-| 三集版 v2.1 | `桌面\凹凸cad小助手（三集）v1.1 - 副本` | 旧版：含 SynapsCAD（GPL-3.0），已弃用 |
-| 非三集版 v1.1 | `桌面\凹凸cad助手 v1.1` | 基础版：text-to-cad + multiCAD-mcp，无规范层 |
+| **二集版 v1.5** (本 Skill) | 本仓库（安装目录 `凹凸CAD助手1.5/app`） | 二集版：text-to-cad + multiCAD-mcp + 国标规范 + 行业标注，MIT 许可证 |
+| 三集版 v2.1 | 未纳入本仓库 | 上游旧版：含 SynapsCAD（GPL-3.0），已弃用 |
+| 非三集版 v1.1 | 未纳入本仓库 | 上游旧版：text-to-cad + multiCAD-mcp，无规范层 |
 
 **标准规范模块**：
 
@@ -77,7 +77,7 @@ envcad 是**跨行业工程制图** CAD 插件。覆盖 16+ 行业，90+ 标准�
 | multiCAD-mcp | COM bridge to AutoCAD/ZWCAD | `envcad/engine/multicad_bridge.py` |
 
 **环境变量约定**（本文档内）：
-- `{PACKAGE_DIR}` = 桌面 `凹凸cad小助手（二集）v1.5` 目录
+- `{PACKAGE_DIR}` = 本仓库根目录（安装目录 `凹凸CAD助手1.5/app`）
 - `{PYTHON}` = Python 3.10+ 解释器路径
 
 ## Environment / Install
@@ -116,9 +116,11 @@ pip install openpyxl python-docx
 
 ### 方式二：MCP（补充，精细操作）
 
-非三集版 v1.1 提供了 MCP 服务端（`凹凸cad助手 v1.1\integrated-cad-mcp`），
-已配置在 `~/.workbuddy/mcp.json`。提供 15 个工具模块（cad_model、draw_entities、
-manage_layers 等），适合细粒度参数化建模。与 Skill 互补使用。
+> ⚠️ 本仓库**不含** MCP 服务端，本节仅记录上游历史版本的能力，供需要时自行追溯。
+
+上游旧版曾提供 MCP 服务端（`integrated-cad-mcp`，15 个工具模块：cad_model、
+draw_entities、manage_layers 等），适合细粒度参数化建模，与 Skill 互补使用。
+本仓库只维护 **CLI / Python API / Skill** 三种用法。
 
 ## Trigger Conditions
 

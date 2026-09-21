@@ -24,12 +24,14 @@ classifiers = [
     "Intended Audience :: Engineering",
     "Topic :: Scientific/Engineering :: CAD",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
 ]
 
 [project.urls]
-Homepage = "https://gitee.com/Funkidragon99/cad1.0"
-Repository = "https://gitee.com/Funkidragon99/cad1.0"
-Documentation = "https://gitee.com/Funkidragon99/cad1.0/blob/main/USAGE.md"
+Homepage = "https://github.com/kingkemander/cad-helper"
+Repository = "https://github.com/kingkemander/cad-helper"
+Documentation = "https://github.com/kingkemander/cad-helper/blob/main/USAGE.md"
 
 [project.optional-dependencies]
 cad = ["pywin32"]            # multiCAD-mcp COM 桥接（AutoCAD/ZWCAD）

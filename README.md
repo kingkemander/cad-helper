@@ -41,17 +41,27 @@ envcad/
 
 ## 安装
 
-```powershell
-cd "凹凸cad小助手（二集）v1.5"   # 进入插件根目录
+```bash
+cd cad-helper               # 进入插件根目录（换成你 clone 时的目录名）
 pip install -e .            # 核心（ezdxf）：绘图 / 标注 / 设计验算
-pip install -e ".[cad]"     # + COM 桥接（pywin32，推送 AutoCAD/ZWCAD）
 pip install -e ".[doc]"     # + 文档自动化（openpyxl + python-docx）→ 启用 envcad doc
-pip install -e ".[all]"     # 全套：cad + doc
+pip install -e ".[cad]"     # + COM 桥接（pywin32，推送 AutoCAD/ZWCAD）—— 仅 Windows
+pip install -e ".[all]"     # 全套：cad + doc —— 仅 Windows（含 pywin32）
 ```
 
 依赖：Python >=3.10、ezdxf>=1.3。`envcad doc`（DOCX 说明书 / XLSX 清单）需要 `[doc]` 额外依赖，
-全新安装务必使用 `pip install -e ".[all]"` 或 `".[doc]"`，否则运行文档命令会报 `ModuleNotFoundError`。
-本机已验证 Python 3.14.4 + ezdxf 1.4.4 + pywin32。
+否则运行文档命令会报 `ModuleNotFoundError`。
+
+**按平台选安装组合**：
+
+| 平台 | 推荐命令 | 说明 |
+|------|----------|------|
+| Windows | `pip install -e ".[all]"` | 含 `pywin32`，COM 桥接推送 AutoCAD/ZWCAD 可用 |
+| macOS / Linux | `pip install -e ".[doc]"` | **不要用 `[all]`**：`pywin32` 只有 Windows 发行版，会安装失败 |
+| 需要 STEP 3D | `pip install -e ".[doc,step]"` | 追加 `build123d`（体积较大） |
+
+本仓库已在 macOS（Python 3.14 + ezdxf 1.4.4，`.[doc]`）上跑通全部 52 个领域与验收图；
+Windows 侧的 COM 桥接沿用上游验证结果。
 
 ## 用法
 

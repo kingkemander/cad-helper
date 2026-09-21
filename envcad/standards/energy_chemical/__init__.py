@@ -22,8 +22,6 @@ substation_pv_foundation        变电站/光伏/风机基础  GB 50059, GB 5079
 
 用法
 ----
->>> import sys
->>> sys.path.insert(0, r"C:/Users/lenovo/Desktop/凹凸cad小助手（二集）v1.5")
 >>> from envcad.engine.dxf_base import new_drawing, save_dxf
 >>> from envcad.standards.energy_chemical import add_a3_frame, draw_vertical_tank
 >>> doc, dimstyle = new_drawing(scale=50)
