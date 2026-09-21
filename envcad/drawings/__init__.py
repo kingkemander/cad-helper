@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import weakref
+
 from ezdxf.enums import TextEntityAlignment
 
 from ..standards.annotate import _t
@@ -49,6 +51,32 @@ def draw_tech_notes(msp, origin, scale: float, title: str, notes: list,
 def draw_note(msp, origin, scale: float, text: str, height: float = 3.5):
     """单行说明文字。"""
     _t(msp, text, origin, height * scale, layer="文字")
+
+
+# 每张图一个附表列（按 modelspace 缓存，弱引用避免拖住文档）
+_AUX_COLUMNS = weakref.WeakKeyDictionary()
+
+
+def aux_column(msp, scale: float, tracker=None, gap: float = 1500.0,
+               exclude_annex: bool = True):
+    """取本图（modelspace）的附表列；同一张图多次调用复用同一列。
+
+    各图纸生成器把图例、技术要求、校验报告分写在不同的 ``_sN_xxx`` 函数里，
+    这里按 modelspace 缓存一列，各函数只管 ``aux_column(msp, s, tracker).add(...)``
+    就能自上而下顺次堆叠，不必互相传列对象、也不必调用方手算块高。
+
+    附表贴的是**主体包络**右侧（``frame.content_bbox``），不是
+    ``draw_frame`` 返回的初始图框角点 —— 后者会让内容包络被附表撑满整张默认
+    A2 图框，最小可装幅面因此被整体抬高（实测 12 张验收图全部虚涨 1.04~4.78 倍）。
+    """
+    from ..standards.frame import content_bbox
+    from ..standards.layout import AuxColumn
+    col = _AUX_COLUMNS.get(msp)
+    if col is None:
+        col = AuxColumn(msp, content_bbox(msp, exclude_annex=exclude_annex), scale,
+                        gap=gap, tracker=tracker)
+        _AUX_COLUMNS[msp] = col
+    return col
 
 
 _MC = TextEntityAlignment.MIDDLE_CENTER
@@ -125,3 +153,4 @@ def draw_material_table(msp, origin, scale: float, rows: list, tracker=None):
     msp.add_line((ox, yb), (ox + total_w, yb), dxfattribs={"layer": "附表"})
     msp.add_line((ox, oy - th), (ox, yb), dxfattribs={"layer": "附表"})
     msp.add_line((ox + total_w, oy - th), (ox + total_w, yb), dxfattribs={"layer": "附表"})
+    return (ox, yb, ox + total_w, oy)

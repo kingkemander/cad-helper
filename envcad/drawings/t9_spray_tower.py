@@ -23,7 +23,8 @@ from ..standards.spray_tower import (
     draw_spray_tower_slurry_system,
 )
 from ..design.env_process import design_spray_tower_full
-from . import draw_tech_notes, draw_spec_table, draw_material_table
+from . import (draw_tech_notes, draw_spec_table, draw_material_table,
+                   aux_column)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0
@@ -64,11 +65,11 @@ def _s1_outline(out_dir, scale, p, project):
                                label="正立面图", tracker=tracker)
     draw_spray_tower_plan(msp, (x0 + 32000, y0 + 12000), p, scale,
                           label="平面图", tracker=tracker)
-    draw_legend(msp, (x1 - 150 * s, y1 - 62 * s), scale,
+    aux_column(msp, s, tracker).add(draw_legend,
                 [("equip", "设备轮廓", "按图"), ("center", "中心线", "—"),
                  ("arrow_flow", "气流方向", "顺工艺"), ("elevation", "标高", "m")],
                 tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "外形总图技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "外形总图技术要求",
                     [f"烟气量 {p['air_flow']:.0f} m³/h，SO2 {p['so2_in']:.0f}→{p['so2_out']}mg/m³。",
                      f"塔径 Φ{p['D']}m，浆池 Φ{p['D_pool']}m，总高 {p['H_total']/1000:.1f}m。",
                      f"脱硫效率 {p['eff']*100:.1f}%，液气比 {p['lg']} L/m³。",
@@ -100,7 +101,7 @@ def _s2_spec(out_dir, scale, p, project):
     ]
     draw_spec_table(msp, (x0 + 30000, y1 - 8000), scale,
                     "湿法脱硫塔技术特性表", rows, tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "说明",
+    aux_column(msp, s, tracker, exclude_annex=False).add(draw_tech_notes, "说明",
                     [f"出口 SO2 {p['so2_out']} mg/m³ {'≤' if p['ok'] else '>'} "
                      f"限值 {p['limit']}，{'达标' if p['ok'] else '需提效'}。",
                      "喷淋浆液为石灰石浆，钙硫比 1.02~1.08。",
@@ -116,7 +117,7 @@ def _s3_section(out_dir, scale, p, project):
     s = scale
     draw_spray_tower_section(msp, (x0 + 16000, y0 + 5000), p, scale,
                              label="1-1 剖面图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "剖面技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "剖面技术要求",
                     [f"浆池高 {p['H_pool']:.0f}mm，浆池容积 {p['V_pool']}m³。",
                      f"喷淋 {p['n_spray']} 层，层间距 {p['layer_gap']:.0f}mm。",
                      "浆池设氧化空气管，亚硫酸钙强制氧化。",
@@ -132,7 +133,7 @@ def _s4_spray_layer(out_dir, scale, p, project):
     s = scale
     draw_spray_tower_spray_layer(msp, (x0 + 22000, y0 + 15000), p, scale,
                                  label="喷淋层布置图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "喷淋层技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "喷淋层技术要求",
                     [f"喷淋母管+支管 FRP，喷嘴碳化硅螺旋实心锥。",
                      f"喷嘴覆盖率≥200%，雾化粒径 1500~2500μm。",
                      f"每喷淋层配一台循环泵（{p['pump_q']:.0f}m³/h）。",
@@ -148,7 +149,7 @@ def _s5_demister(out_dir, scale, p, project):
     s = scale
     draw_spray_tower_demister(msp, (x0 + 8000, y0 + 12000), p, scale,
                               label="除雾器详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "除雾器技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "除雾器技术要求",
                     ["屋脊式折流板，PP 材质，2 级串联。",
                      "级间设在线冲洗水管，定时冲洗防结垢。",
                      "出口雾滴浓度≤75mg/m³。",
@@ -164,7 +165,7 @@ def _s6_slurry(out_dir, scale, p, project):
     s = scale
     draw_spray_tower_slurry_system(msp, (x0 + 8000, y0 + 12000), p, scale,
                                    label="浆池及循环系统图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "浆池技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "浆池技术要求",
                     [f"浆池 Φ{p['D_pool']}m，容积 {p['V_pool']}m³。",
                      "侧进式搅拌器防沉降，氧化空气强制氧化。",
                      f"循环泵 {p['n_pump']} 台，单台 {p['pump_q']:.0f}m³/h。",
@@ -180,10 +181,11 @@ def _s7_flow(out_dir, scale, p, project):
     s = scale
     stages = ["锅炉烟气", "除尘器", "脱硫塔", "除雾器", "烟囱排放"]
     n = len(stages)
-    avail = (x1 - x0) - 12000
-    gap = avail * 0.05 / max(1, n - 1)
-    bw = (avail - gap * (n - 1)) / n
-    bh_ = 6000
+    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
+    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
+    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
+    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
+    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
     bx = x0 + 6000
     by = y0 + 16000
     for i, st in enumerate(stages):
@@ -197,7 +199,7 @@ def _s7_flow(out_dir, scale, p, project):
     _t(msp, f"石灰石浆液制备 → 浆池循环  |  石膏脱水外运",
        (bx + 2 * (bw + gap) + bw / 2, by + bh_ + 5 * s), 2.5 * s, align=MC,
        layer="文字", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "工艺流程说明",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "工艺流程说明",
                     [f"烟气经除尘后入脱硫塔，SO2 {p['so2_in']:.0f}→{p['so2_out']}mg/m³。",
                      "石灰石浆液喷淋吸收，生成石膏（CaSO4·2H2O）。",
                      "净化烟气经除雾器后由烟囱排放。",
@@ -224,7 +226,9 @@ def _s8_material(out_dir, scale, p, project):
         ("11", "挡板门", "电动密封", "个", "2"),
         ("12", "控制柜", "PLC pH/密度/液位联锁", "台", "1"),
     ]
-    draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
-    _t(msp, "设备材料表", (x0 + (x1 - x0) / 2, y0 + 5000), 5 * scale,
+    # 图名贴表格正下方居中（旧写法锚在 refit 前图框的**底边中点**：
+    # 表格在左上、图名在底边中间，内容包络被撑成整张 A2 宽/高 → 一张表也要 A2）
+    _mt = draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
+    _t(msp, "设备材料表", ((_mt[0] + _mt[2]) / 2, _mt[1] - 12 * scale), 5 * scale,
        align=MC, layer="文字-标题", tracker=tracker)
     return save_dxf_autofit(doc, os.path.join(out_dir, "ST-08_设备材料表.dxf"), scale, info, tracker)

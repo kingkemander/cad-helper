@@ -29,7 +29,8 @@ from ..standards.uasb import (
     draw_uasb_three_phase, draw_uasb_distributor, draw_uasb_outlet_weir,
 )
 from ..design.env_process import design_uasb_full
-from . import draw_tech_notes, draw_spec_table, draw_material_table
+from . import (draw_tech_notes, draw_spec_table, draw_material_table,
+                   aux_column)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0
@@ -74,11 +75,11 @@ def _s1_outline(out_dir, scale, p, project):
                         label="正立面图", tracker=tracker)
     draw_uasb_plan(msp, (x0 + 32000, y0 + 15000), p, scale,
                    label="平面图", tracker=tracker)
-    draw_legend(msp, (x1 - 150 * s, y1 - 62 * s), scale,
+    aux_column(msp, s, tracker).add(draw_legend,
                 [("equip", "设备轮廓", "按图"), ("center", "中心线", "—"),
                  ("arrow_flow", "水流方向", "顺工艺"), ("elevation", "标高", "m")],
                 tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "外形总图技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "外形总图技术要求",
                     [f"处理水量 {p['Q']:.0f} m³/d，进水 COD {p['cod_in']:.0f} mg/L。",
                      f"有效容积 {p['V_eff']} m³，HRT {p['HRT']} h。",
                      f"反应器 Φ{p['D']}m，总高 {p['H_total']} m。",
@@ -112,7 +113,7 @@ def _s2_spec(out_dir, scale, p, project):
     ]
     draw_spec_table(msp, (x0 + 30000, y1 - 8000), scale,
                     "UASB反应器技术特性表", rows, tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "说明",
+    aux_column(msp, s, tracker, exclude_annex=False).add(draw_tech_notes, "说明",
                     [f"上升流速 {p['upflow_v']} m/h（宜 0.5~1.5），"
                      f"{'合格' if p['v_ok'] else '需调整'}。",
                      f"停留时间 {p['HRT']} h（宜 20~40），"
@@ -131,7 +132,7 @@ def _s3_section(out_dir, scale, p, project):
     s = scale
     draw_uasb_section(msp, (x0 + 18000, y0 + 8000), p, scale,
                       label="1-1 剖面图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "剖面技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "剖面技术要求",
                     [f"污泥床高 {p['H_sludge']}m，悬浮层高 {p['H_suspend']}m。",
                      f"三相分离器高 {p['H_three_phase']}m，沉淀区高 {p['H_settle']}m。",
                      "污泥床污泥浓度 40~80 gSS/L，颗粒污泥为主。",
@@ -148,7 +149,7 @@ def _s4_three_phase(out_dir, scale, p, project):
     s = scale
     draw_uasb_three_phase(msp, (x0 + 12000, y0 + 14000), p, scale,
                           label="三相分离器详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "三相分离器技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "三相分离器技术要求",
                     [f"集气罩倾角 {p['ts_angle']:.0f}°（宜 45~60°）。",
                      "集气罩缝隙流速≤2 m/h，防污泥随气带出。",
                      "气、液、固三相有效分离，污泥顺利回流。",
@@ -165,7 +166,7 @@ def _s5_distributor(out_dir, scale, p, project):
     s = scale
     draw_uasb_distributor(msp, (x0 + 25000, y0 + 16000), p, scale,
                           label="布水系统平面图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "布水技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "布水技术要求",
                     [f"布水点 {p['n_dist_points']} 个，每点服务 {p['serve_area']} m²。",
                      "进水分配均匀，避免短流与死区。",
                      "布水管 UPVC，穿孔管或一管多点配水。",
@@ -182,7 +183,7 @@ def _s6_outlet_weir(out_dir, scale, p, project):
     s = scale
     draw_uasb_outlet_weir(msp, (x0 + 10000, y0 + 18000), p, scale,
                           label="出水堰及排泥详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "出水堰技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "出水堰技术要求",
                     [f"三角堰板 90°齿形，堰负荷 {p['weir_load']} L/s·m。",
                      "堰口水平，高差≤2mm，出水均匀。",
                      "堰板 304 不锈钢，可调高低。",
@@ -199,10 +200,11 @@ def _s7_flow(out_dir, scale, p, project):
     s = scale
     stages = ["调节池", "提升泵", "UASB反应器", "后续处理", "达标出水"]
     n = len(stages)
-    avail = (x1 - x0) - 12000
-    gap = avail * 0.05 / max(1, n - 1)
-    bw = (avail - gap * (n - 1)) / n
-    bh_ = 6000
+    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
+    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
+    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
+    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
+    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
     bx = x0 + 6000
     by = y0 + 16000
     for i, st in enumerate(stages):
@@ -218,7 +220,7 @@ def _s7_flow(out_dir, scale, p, project):
     _t(msp, f"沼气 {p['biogas_yield']:.0f} m³/d → 收集利用",
        (bx + 2 * (bw + gap) + bw / 2, by + bh_ + 5 * s), 2.5 * s, align=MC,
        layer="文字", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "工艺流程说明",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "工艺流程说明",
                     [f"高浓度有机废水（COD {p['cod_in']:.0f}mg/L）经调节后入UASB。",
                      f"厌氧降解去除率约 85%，COD负荷 {p['cod_load']} kg/d。",
                      "产生沼气收集利用（发电/锅炉），污泥定期排放。",
@@ -246,7 +248,9 @@ def _s8_material(out_dir, scale, p, project):
         ("11", "爬梯平台", "Q235 镀锌", "套", "1"),
         ("12", "控制柜", "PLC pH/温度/液位监测", "台", "1"),
     ]
-    draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
-    _t(msp, "设备材料表", (x0 + (x1 - x0) / 2, y0 + 5000), 5 * scale,
+    # 图名贴表格正下方居中（旧写法锚在 refit 前图框的**底边中点**：
+    # 表格在左上、图名在底边中间，内容包络被撑成整张 A2 宽/高 → 一张表也要 A2）
+    _mt = draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
+    _t(msp, "设备材料表", ((_mt[0] + _mt[2]) / 2, _mt[1] - 12 * scale), 5 * scale,
        align=MC, layer="文字-标题", tracker=tracker)
     return save_dxf_autofit(doc, os.path.join(out_dir, "UASB-08_设备材料表.dxf"), scale, info, tracker)

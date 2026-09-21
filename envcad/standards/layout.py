@@ -102,6 +102,9 @@ class AuxColumn:
         self.scale = scale
         self.gap = gap
         self.item_gap = item_gap
+        if content_bbox is None:
+            # 主体还没有图形（空图/仅附表）：退化为以原点为内容块
+            content_bbox = (0.0, 0.0, 0.0, 0.0)
         cx0, cy0, cx1, cy1 = content_bbox
         # 默认：贴在内容块右侧、与内容块顶对齐
         self.x = (cx1 + gap) if x is None else x

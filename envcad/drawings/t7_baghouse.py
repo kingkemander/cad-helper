@@ -29,7 +29,8 @@ from ..standards.baghouse import (
     draw_baghouse_tube_sheet, draw_baghouse_pulse, draw_baghouse_hopper,
 )
 from ..design.env_process import design_baghouse_full
-from . import draw_tech_notes, draw_spec_table, draw_material_table
+from . import (draw_tech_notes, draw_spec_table, draw_material_table,
+                   aux_column)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0     # 技术要求框宽(图纸mm)
@@ -82,11 +83,11 @@ def _s1_outline(out_dir, scale, p, project):
     py0 = y0 + 9000
     draw_baghouse_plan(msp, (px0, py0), p, scale, label="平面图", tracker=tracker)
 
-    draw_legend(msp, (x1 - 150 * s, y1 - 62 * s), scale,
+    aux_column(msp, s, tracker).add(draw_legend,
                 [("equip", "设备轮廓", "按图"), ("center", "中心线", "—"),
                  ("arrow_flow", "气流方向", "顺工艺"), ("elevation", "标高", "m")],
                 tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "外形总图技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "外形总图技术要求",
                     [f"处理风量 {p['air_flow']:.0f} m³/h，过滤风速 {p['filter_v']} m/min。",
                      f"总过滤面积 {p['filter_area']} m²，滤袋 {p['n_bags']} 条。",
                      f"设备阻力 {p['dp']} Pa，除尘效率 ≥{p['eff']*100:.1f}%。",
@@ -123,7 +124,7 @@ def _s2_spec(out_dir, scale, p, project):
     ]
     draw_spec_table(msp, (x0 + 30000, y1 - 8000), scale,
                     "袋式除尘器技术特性表", rows, tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "说明",
+    aux_column(msp, s, tracker, exclude_annex=False).add(draw_tech_notes, "说明",
                     [f"出口浓度 {p['conc_out']} mg/m³ "
                      f"{'≤' if p['ok'] else '>'} 限值 {p['limit']} mg/m³，"
                      f"{'达标' if p['ok'] else '需提高效率'}。",
@@ -141,7 +142,7 @@ def _s3_section(out_dir, scale, p, project):
     s = scale
     draw_baghouse_section(msp, (x0 + 16000, y0 + 9000), p, scale,
                           label="1-1 剖面图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "剖面技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "剖面技术要求",
                     [f"滤袋 Φ{p['bag_dia_mm']:.0f}×{p['bag_len_mm']:.0f}，"
                      f"配镀锌袋笼，垂直度≤1‰。",
                      f"花板孔 Φ{p['bag_dia_mm']+5:.0f}，孔口光滑无毛刺。",
@@ -159,7 +160,7 @@ def _s4_tube_sheet(out_dir, scale, p, project):
     s = scale
     draw_baghouse_tube_sheet(msp, (x0 + 12000, y0 + 10000), p, scale,
                              label="花板布置图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "花板技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "花板技术要求",
                     [f"花板尺寸 {p['plate_L']:.0f}×{p['plate_W']:.0f} mm，"
                      f"厚度≥6mm。",
                      f"孔径 Φ{p['bag_dia_mm']+5:.0f}，共 {p['n_bags']} 孔。",
@@ -177,7 +178,7 @@ def _s5_pulse(out_dir, scale, p, project):
     s = scale
     draw_baghouse_pulse(msp, (x0 + 12000, y0 + 12000), p, scale,
                         label="喷吹系统图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "喷吹技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "喷吹技术要求",
                     [f"脉冲阀 {p['n_pulse_valve']} 个（每列1个），"
                      f"直角式 1″。",
                      f"喷吹管 {p['cols']} 根，每管 {p['rows']} 喷嘴对准袋口。",
@@ -195,7 +196,7 @@ def _s6_hopper(out_dir, scale, p, project):
     s = scale
     draw_baghouse_hopper(msp, (x0 + 14000, y1 - 12000), p, scale,
                          label="灰斗及卸料装置详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "灰斗技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "灰斗技术要求",
                     ["灰斗斗壁倾角≥60°，内壁光滑防积灰。",
                      "灰斗设料位计，高料位报警联锁卸料。",
                      "卸料采用插板阀+星型卸料器，锁风防漏。",
@@ -213,10 +214,11 @@ def _s7_flow(out_dir, scale, p, project):
 
     stages = ["集气罩", "风管", "袋式除尘器", "离心风机", "烟囱排放"]
     n = len(stages)
-    avail = (x1 - x0) - 12000            # 可用宽度（左右留边）
-    gap = avail * 0.05 / max(1, n - 1)
-    bw = (avail - gap * (n - 1)) / n     # 框宽自适应图框
-    bh_ = 6000
+    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
+    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
+    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
+    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
+    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
     bx = x0 + 6000
     by = y0 + 16000
     for i, st in enumerate(stages):
@@ -229,9 +231,12 @@ def _s7_flow(out_dir, scale, p, project):
             ax0 = cx0 + bw
             draw_flow_arrow(msp, (ax0, by + bh_ / 2), (gap, 0), scale,
                             length=8.0, label="", tracker=tracker)
+    # 说明文字居中于**流程图**（旧写法锚 refit 前图框的水平中心，图缩短后
+    # 会远远飘在图的右侧，把内容包络又拉宽）
     _t(msp, f"系统处理风量 {p['air_flow']:.0f} m³/h",
-       (x0 + (x1 - x0) / 2, y0 + 10000), 3 * s, align=MC, layer="文字-标题", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "工艺流程说明",
+       (bx + (n * (bw + gap) - gap) / 2, by - 6 * s), 3 * s, align=MC,
+       layer="文字-标题", tracker=tracker)
+    aux_column(msp, s, tracker).add(draw_tech_notes, "工艺流程说明",
                     ["含尘气体经集气罩收集，由风管送入袋式除尘器。",
                      f"净化后气体经离心风机由烟囱排放，出口≤{p['limit']}mg/m³。",
                      "除尘器收集的粉尘经卸料装置定期外运。",
@@ -259,7 +264,9 @@ def _s8_material(out_dir, scale, p, project):
         ("11", "控制柜", "PLC 定时/定压喷吹", "台", "1"),
         ("12", "花板", f"{p['plate_L']:.0f}×{p['plate_W']:.0f} δ=6", "块", "1"),
     ]
-    draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
-    _t(msp, "设备材料表", (x0 + (x1 - x0) / 2, y0 + 5000), 5 * scale,
+    # 图名贴表格正下方居中（旧写法锚在 refit 前图框的**底边中点**：
+    # 表格在左上、图名在底边中间，内容包络被撑成整张 A2 宽/高 → 一张表也要 A2）
+    _mt = draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
+    _t(msp, "设备材料表", ((_mt[0] + _mt[2]) / 2, _mt[1] - 12 * scale), 5 * scale,
        align=MC, layer="文字-标题", tracker=tracker)
     return save_dxf_autofit(doc, os.path.join(out_dir, "BH-08_设备材料表.dxf"), scale, info, tracker)

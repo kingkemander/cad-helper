@@ -237,8 +237,12 @@ def draw_ac_desorption(msp, origin, p: dict, scale: float = 100.0,
         gap = avail_w * 0.06 / max(1, n - 1)
         bw = (avail_w - gap * (n - 1)) / n      # 框宽自适应图框
     else:
-        bw, gap = 11000.0, 6000.0
-    bh = 5500.0
+        # 默认按**纸面尺寸**定框宽（30mm 框 / 8mm 间距）。
+        # 旧默认 11000/6000（实物 mm，1:100 下即 110mm 框、60mm 间距）4 个框
+        # 要 620mm 纸面宽 —— 框图自己就把幅面顶到 A1。调用方也不应再传按
+        # refit 前图框宽度算出的 avail_w。
+        bw, gap = 30 * s, 8 * s
+    bh = 16 * s          # 16mm 高（纸面）
     for i, bt in enumerate(boxes):
         bx = ox + i * (bw + gap)
         _rect(msp, bx, oy, bx + bw, oy + bh, "工艺")

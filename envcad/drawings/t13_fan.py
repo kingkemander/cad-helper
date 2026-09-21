@@ -22,7 +22,8 @@ from ..standards.fan import (
     draw_fan_flange, draw_fan_base, draw_fan_installation,
 )
 from ..design.env_process import design_fan_full
-from . import draw_tech_notes, draw_spec_table, draw_material_table
+from . import (draw_tech_notes, draw_spec_table, draw_material_table,
+                   aux_column)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0
@@ -63,11 +64,11 @@ def _s1_outline(out_dir, scale, p, project):
                        label="正立面图", tracker=tracker)
     draw_fan_plan(msp, (x0 + 24000, y0 + 6000), p, scale,
                     label="平面图", tracker=tracker)
-    draw_legend(msp, (x1 - 150 * s, y1 - 62 * s), scale,
+    aux_column(msp, s, tracker).add(draw_legend,
                 [("equip", "设备轮廓", "按图"), ("center", "中心线", "—"),
                  ("arrow_flow", "气流方向", "顺工艺"), ("elevation", "标高", "m")],
                 tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "外形总图技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "外形总图技术要求",
                     [f"风量 {p['air_flow']:.0f} m³/h，全压 {p['pressure']:.0f} Pa。",
                      f"轴功率 {p['N_shaft']}kW，配电机 {p['N_rated']}kW。",
                      f"进出口 Φ{p['inlet_dn']:.0f}mm，外形 {p['L']:.0f}×{p['W']:.0f}mm。",
@@ -96,7 +97,7 @@ def _s2_spec(out_dir, scale, p, project):
     ]
     draw_spec_table(msp, (x0 + 30000, y1 - 8000), scale,
                     "离心风机技术特性表", rows, tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "说明",
+    aux_column(msp, s, tracker, exclude_annex=False).add(draw_tech_notes, "说明",
                     [f"电机功率按轴功率×安全系数选定（{p['N_rated']}kW）。",
                      "风机叶轮经动平衡校正（G6.3级）。",
                      "含尘废气选用耐磨叶轮。"],
@@ -111,7 +112,7 @@ def _s3_section(out_dir, scale, p, project):
     s = scale
     draw_fan_section(msp, (x0 + 6000, y0 + 8000), p, scale,
                      label="1-1 剖面图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "剖面技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "剖面技术要求",
                     ["蜗壳钢板焊接，内壁耐磨处理。",
                      "叶轮后倾式，效率高噪声低。",
                      "轴承座配润滑与测温，联轴器传动。"],
@@ -126,7 +127,7 @@ def _s4_flange(out_dir, scale, p, project):
     s = scale
     draw_fan_flange(msp, (x0 + 6000, y0 + 12000), p, scale,
                     label="进出口法兰详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "法兰技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "法兰技术要求",
                     [f"进口法兰 Φ{p['inlet_dn']:.0f}，螺栓孔均布。",
                      f"出口法兰 {p['outlet_dn']:.0f}×{p['outlet_dn']:.0f}。",
                      "法兰角钢焊接平整，垫料密封。"],
@@ -141,7 +142,7 @@ def _s5_base(out_dir, scale, p, project):
     s = scale
     draw_fan_base(msp, (x0 + 8000, y0 + 12000), p, scale,
                   label="减振基础详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "减振基础技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "减振基础技术要求",
                     ["弹簧减振器×4，额定荷载按风机重量选。",
                      "钢筋混凝土惰性块，质量≥3倍风机。",
                      "减振效率≥90%，隔振良好。"],
@@ -156,7 +157,7 @@ def _s6_installation(out_dir, scale, p, project):
     s = scale
     draw_fan_installation(msp, (x0 + 4000, y0 + 8000), p, scale,
                           label="风机安装系统图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "安装技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "安装技术要求",
                     ["进出口配帆布软接，隔振降噪。",
                      "联轴器配防护罩，安全运行。",
                      "减振器+惰性块，整体安装。"],
@@ -171,10 +172,11 @@ def _s7_flow(out_dir, scale, p, project):
     s = scale
     stages = ["集气罩", "风管", "治理设备", "离心风机", "烟囱"]
     n = len(stages)
-    avail = (x1 - x0) - 12000
-    gap = avail * 0.05 / max(1, n - 1)
-    bw = (avail - gap * (n - 1)) / n
-    bh_ = 6000
+    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
+    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
+    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
+    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
+    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
     bx = x0 + 6000
     by = y0 + 16000
     for i, st in enumerate(stages):
@@ -185,7 +187,7 @@ def _s7_flow(out_dir, scale, p, project):
         if i < n - 1:
             draw_flow_arrow(msp, (cx0 + bw, by + bh_ / 2), (gap, 0), scale,
                             length=8.0, label="", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "系统流程说明",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "系统流程说明",
                     [f"离心风机提供系统动力，风量 {p['air_flow']:.0f}m³/h。",
                      "风机置于治理设备后（清洁侧），负压运行。",
                      f"全压 {p['pressure']:.0f}Pa，克服系统阻力。"],
@@ -209,7 +211,9 @@ def _s8_material(out_dir, scale, p, project):
         ("9", "轴承座", "配油杯+测温", "个", "2"),
         ("10", "地脚螺栓", "M20", "套", "8"),
     ]
-    draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
-    _t(msp, "设备材料表", (x0 + (x1 - x0) / 2, y0 + 5000), 5 * scale,
+    # 图名贴表格正下方居中（旧写法锚在 refit 前图框的**底边中点**：
+    # 表格在左上、图名在底边中间，内容包络被撑成整张 A2 宽/高 → 一张表也要 A2）
+    _mt = draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
+    _t(msp, "设备材料表", ((_mt[0] + _mt[2]) / 2, _mt[1] - 12 * scale), 5 * scale,
        align=MC, layer="文字-标题", tracker=tracker)
     return save_dxf_autofit(doc, os.path.join(out_dir, "FAN-08_设备材料表.dxf"), scale, info, tracker)

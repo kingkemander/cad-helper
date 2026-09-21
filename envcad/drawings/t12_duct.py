@@ -22,7 +22,8 @@ from ..standards.duct import (
     draw_duct_tee, draw_duct_reducer, draw_duct_hanger,
 )
 from ..design.env_process import design_duct_full
-from . import draw_tech_notes, draw_spec_table, draw_material_table
+from . import (draw_tech_notes, draw_spec_table, draw_material_table,
+                   aux_column)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0
@@ -60,11 +61,11 @@ def _s1_plan(out_dir, scale, p, project):
     s = scale
     draw_duct_plan(msp, (x0 + 4000, y0 + 4000), p, scale,
                    label="风管平面布置图", tracker=tracker)
-    draw_legend(msp, (x1 - 150 * s, y1 - 62 * s), scale,
+    aux_column(msp, s, tracker).add(draw_legend,
                 [("pipe_solid", "风管", "按图"), ("valve", "风阀", "按图"),
                  ("arrow_flow", "气流方向", "顺工艺"), ("elevation", "标高", "m")],
                 tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "平面布置技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "平面布置技术要求",
                     [f"风量 {p['air_flow']:.0f} m³/h，风速 {p['v_duct']} m/s。",
                      f"主管 Φ{p['dn']:.0f}mm，镀锌钢板厚 {p['plate_t']}mm。",
                      "风管走向顺工艺，减少弯头降低阻力。",
@@ -92,7 +93,7 @@ def _s2_spec(out_dir, scale, p, project):
     ]
     draw_spec_table(msp, (x0 + 30000, y1 - 8000), scale,
                     "风管系统技术特性表", rows, tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "说明",
+    aux_column(msp, s, tracker, exclude_annex=False).add(draw_tech_notes, "说明",
                     ["风管采用镀锌钢板咬口/焊接制作。",
                      "法兰连接，垫料密封防漏风。",
                      "含尘废气风管内壁做耐磨处理。"],
@@ -107,7 +108,7 @@ def _s3_elevation(out_dir, scale, p, project):
     s = scale
     draw_duct_elevation(msp, (x0 + 8000, y0 + 14000), p, scale,
                         label="风管立面图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "立面技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "立面技术要求",
                     [f"风管标高按工艺要求敷设，坡度顺气流。",
                      f"支吊架间距 {p['hanger_gap']/1000:.0f}m，转弯处加密。",
                      "穿墙/楼板处设套管，密封防火。"],
@@ -122,7 +123,7 @@ def _s4_elbow(out_dir, scale, p, project):
     s = scale
     draw_duct_elbow(msp, (x0 + 8000, y0 + 8000), p, scale,
                     label="90°弯头详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "弯头技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "弯头技术要求",
                     [f"曲率半径 R={p['elbow_r']:.0f}mm（≥1.0D）。",
                      "内外弧咬口/焊接，导流叶片（大曲率时）。",
                      "弯头两端法兰连接。"],
@@ -139,7 +140,7 @@ def _s5_tee_reducer(out_dir, scale, p, project):
                   label="三通详图", tracker=tracker)
     draw_duct_reducer(msp, (x0 + 24000, y0 + 16000), p, scale,
                       label="变径详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "管件技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "管件技术要求",
                     ["三通主管×支管，夹角顺气流方向。",
                      "变径采用同心渐缩，长度按管径确定。",
                      "管件与主管等壁厚，法兰连接。"],
@@ -154,7 +155,7 @@ def _s6_hanger(out_dir, scale, p, project):
     s = scale
     draw_duct_hanger(msp, (x0 + 16000, y0 + 10000), p, scale,
                      label="支吊架详图", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "支吊架技术要求",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "支吊架技术要求",
                     [f"支吊架间距 {p['hanger_gap']/1000:.0f}m。",
                      "吊杆+槽钢横担+抱箍，热镀锌。",
                      "承载按风管自重+积灰荷载验算。"],
@@ -169,10 +170,11 @@ def _s7_flow(out_dir, scale, p, project):
     s = scale
     stages = ["集气罩", "支风管", "主风管", "治理设备", "风机"]
     n = len(stages)
-    avail = (x1 - x0) - 12000
-    gap = avail * 0.05 / max(1, n - 1)
-    bw = (avail - gap * (n - 1)) / n
-    bh_ = 6000
+    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
+    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
+    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
+    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
+    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
     bx = x0 + 6000
     by = y0 + 16000
     for i, st in enumerate(stages):
@@ -183,7 +185,7 @@ def _s7_flow(out_dir, scale, p, project):
         if i < n - 1:
             draw_flow_arrow(msp, (cx0 + bw, by + bh_ / 2), (gap, 0), scale,
                             length=8.0, label="", tracker=tracker)
-    draw_tech_notes(msp, (x0 + 3 * s, y1 - 30 * s), scale, "收集系统说明",
+    aux_column(msp, s, tracker).add(draw_tech_notes, "收集系统说明",
                     [f"各集气罩废气经支风管汇入主管（Φ{p['dn']:.0f}）。",
                      "主管风速 10~15m/s，防粉尘沉积。",
                      "系统负压运行，风机置于治理设备后。"],
@@ -207,7 +209,9 @@ def _s8_material(out_dir, scale, p, project):
         ("9", "镀锌钢板", f"δ={p['plate_t']}mm", "m²", "60"),
         ("10", "密封垫料", "橡胶/8501", "m", "80"),
     ]
-    draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
-    _t(msp, "设备材料表", (x0 + (x1 - x0) / 2, y0 + 5000), 5 * scale,
+    # 图名贴表格正下方居中（旧写法锚在 refit 前图框的**底边中点**：
+    # 表格在左上、图名在底边中间，内容包络被撑成整张 A2 宽/高 → 一张表也要 A2）
+    _mt = draw_material_table(msp, (x0 + 8000, y1 - 8000), scale, rows, tracker)
+    _t(msp, "设备材料表", ((_mt[0] + _mt[2]) / 2, _mt[1] - 12 * scale), 5 * scale,
        align=MC, layer="文字-标题", tracker=tracker)
     return save_dxf_autofit(doc, os.path.join(out_dir, "DU-08_设备材料表.dxf"), scale, info, tracker)

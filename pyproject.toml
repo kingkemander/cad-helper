@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "envcad"
-version = "1.5.9"
+version = "1.5.10"
 description = "跨行业国标工程制图插件（集成 text-to-cad / multiCAD-mcp，覆盖建筑/土木/结构/机械/环保/电气/给排水/暖通/液压/化工及农业食品·电子半导体·能源化工·测绘GIS·桥梁·土壤修复·环境应急·环评等 16+ 行业，国标 DXF 引擎 + COM 桥接）"
 readme = "README.md"
 requires-python = ">=3.10"
