@@ -1286,7 +1286,9 @@ def _list_components():
     print("以下 11 个组件模块已内置（_COMPONENT_ONLY，Python API 调用）：")
     print("  gdt / bom / dim / dimensions / symbols / templates / views / markup / notes / rebar / image_bridge")
     print("调用方式（Python API）：")
-    print("  from envcad.standards.dimensions import draw_dimension")
+    # 注意：draw_dimension 在 standards.dim（产出真实 DIMENSION 实体），
+    # standards.dimensions 是另一套手工画线标注，没有 draw_dimension。
+    print("  from envcad.standards.dim import draw_dimension")
     print("  doc = ezdxf.new('R2018'); msp = doc.modelspace()")
     print("  draw_dimension(msp, (0, 0), (120, 0), text='100'); doc.saveas('out.dxf')")
 
