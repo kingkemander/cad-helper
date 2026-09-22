@@ -249,8 +249,8 @@ def app_executable(venv_dir: Path, name: str) -> Path:
 # ---------------------------------------------------------------- 4. 验证出图
 
 
-def verify(app: Path, venv_python: Path, out_dir: Path) -> None:
-    envcad = app_executable(app.parent / ".venv", "envcad")
+def verify(app: Path, venv_dir: Path, out_dir: Path) -> None:
+    envcad = app_executable(venv_dir, "envcad")
     if not envcad.exists():
         raise Fail(f"没找到 envcad 可执行文件：{envcad}")
 
@@ -271,7 +271,7 @@ def verify(app: Path, venv_python: Path, out_dir: Path) -> None:
     if result.returncode != 0 or not produced:
         raise Fail("出图验证失败：\n" + result.stdout.strip()[-2000:])
 
-    check = run([str(venv_python), "-c",
+    check = run([str(app_executable(venv_dir, "python")), "-c",
                  "import ezdxf,glob,sys,os;"
                  "fs=sorted(glob.glob(os.path.join(sys.argv[1],'*.dxf')));"
                  "[print(os.path.basename(f), ezdxf.readfile(f).dxfversion,"
@@ -422,7 +422,7 @@ def main() -> int:
     install_deps(venv_python, app, extras)
 
     step(4, "验证出图能力")
-    verify(app, venv_python, install_dir / "out" / "verify")
+    verify(app, venv_dir, install_dir / "out" / "verify")
 
     step(5, "注册智能体")
     agent_file = write_agent(workspace, app)
