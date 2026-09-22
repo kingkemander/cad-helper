@@ -39,7 +39,15 @@ envcad/
 └── auto_registry.py  domains/*.yaml 零冲突自动注册
 ```
 
-## 安装
+## 安装（在 SpaceAgents 里一键装成智能体）
+
+如果你用 SpaceAgents，**不需要手动 clone 和 pip install**。把
+[`skills/cad-assistant/SKILL.md`](skills/cad-assistant/SKILL.md) 交给 AI 助手，说一句「安装 AutoCAD 助手」，
+它会完成源码获取 → 独立 venv → 依赖安装 → 实测出图 → 在智能体列表注册「AutoCAD 助手」，
+并把智能体绑定到本仓库（之后可用 `git pull` 一键升级）。安装只落在 `~/凹凸CAD助手1.5` 与当前工作区，
+不动系统 Python。
+
+## 安装（手动 / 开发者）
 
 ```bash
 cd cad-helper               # 进入插件根目录（换成你 clone 时的目录名）
