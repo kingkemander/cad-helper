@@ -129,7 +129,7 @@ def _tri_vector(msp, tip: Tuple[float, float], direction: Tuple[float, float],
     ]
     
     try:
-        msp.add_solid(pts + [pts[0]], dxfattribs={"layer": layer})
+        msp.add_solid(pts, dxfattribs={"layer": layer})
     except Exception as _e:
         msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": layer})
 

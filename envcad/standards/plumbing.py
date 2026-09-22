@@ -230,7 +230,7 @@ def draw_valve_plumbing(msp, center, v_type: str = "gate",
         pts = [(cx, cy - tri_h / 2), (cx, cy + tri_h / 2),
                (cx + tri_w, cy)]
         try:
-            msp.add_solid(pts + [pts[0]], dxfattribs={"layer": layer})
+            msp.add_solid(pts, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": layer})
         msp.add_line((cx + tri_w, cy), (cx + tri_w + 4 * s, cy),
@@ -324,7 +324,7 @@ def draw_fire_hydrant(msp, center, h_type: str = "indoor",
         # 室外地上：三角
         tri = [(cx, cy + r), (cx - r, cy - r), (cx + r, cy - r)]
         try:
-            msp.add_solid(tri + [tri[0]], dxfattribs={"layer": layer})
+            msp.add_solid(tri, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(tri, close=True, dxfattribs={"layer": layer})
 

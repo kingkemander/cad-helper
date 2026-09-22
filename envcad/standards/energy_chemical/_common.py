@@ -173,7 +173,7 @@ def solid_tri(msp, pts: Sequence[Tuple[float, float]], layer: str = L_THICK):
     """实心三角（箭头/标高符号），失败回退为闭合多段线。"""
     pts = list(pts)
     try:
-        return msp.add_solid(pts + [pts[0]], dxfattribs={"layer": layer})
+        return msp.add_solid(pts, dxfattribs={"layer": layer})
     except Exception as _e:
         return msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": layer})
 

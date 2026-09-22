@@ -426,7 +426,7 @@ def draw_feeder(msp, origin, length: float, direction: str = "down",
                (ex - dx * arr_h + px, ey - dy * arr_h + py),
                (ex - dx * arr_h - px, ey - dy * arr_h - py)]
     try:
-        msp.add_solid(arr_pts + [arr_pts[0]], dxfattribs={"layer": layer})
+        msp.add_solid(arr_pts, dxfattribs={"layer": layer})
     except Exception as _e:
         msp.add_lwpolyline(arr_pts, close=True, dxfattribs={"layer": layer})
 

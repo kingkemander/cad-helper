@@ -233,7 +233,7 @@ def draw_datum_symbol(msp, target, datum_id: str, scale: float = 100.0,
 
     # 填充三角
     try:
-        msp.add_solid(tri_pts + [tri_pts[0]], dxfattribs={"layer": layer})
+        msp.add_solid(tri_pts, dxfattribs={"layer": layer})
     except Exception as _e:
         # 降级为线框三角
         msp.add_lwpolyline(tri_pts, close=True, dxfattribs={"layer": layer})

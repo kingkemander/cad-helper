@@ -133,7 +133,7 @@ def draw_pump(msp, center, p_type: str = "fixed_uni",
                  (cx + r + tri_w, cy + tri_h / 2),
                  (cx + r + tri_w + tri_h, cy)]
         try:
-            msp.add_solid(pts_r + [pts_r[0]], dxfattribs={"layer": layer})
+            msp.add_solid(pts_r, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(pts_r, close=True, dxfattribs={"layer": layer})
         # 左侧三角
@@ -141,7 +141,7 @@ def draw_pump(msp, center, p_type: str = "fixed_uni",
                  (cx - r, cy + tri_h / 2),
                  (cx - r - tri_h, cy)]
         try:
-            msp.add_solid(pts_l + [pts_l[0]], dxfattribs={"layer": layer})
+            msp.add_solid(pts_l, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(pts_l, close=True, dxfattribs={"layer": layer})
         msp.add_line((cx - r, cy), (cx - r - tri_w, cy),
@@ -156,7 +156,7 @@ def draw_pump(msp, center, p_type: str = "fixed_uni",
                (cx + r + tri_w, cy + tri_h / 2),
                (cx + r + tri_w + tri_h, cy)]
         try:
-            msp.add_solid(pts + [pts[0]], dxfattribs={"layer": layer})
+            msp.add_solid(pts, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": layer})
 
@@ -224,7 +224,7 @@ def draw_motor(msp, center, m_type: str = "fixed_uni",
                (cx + r * 0.6, cy + tri_h / 2),
                (cx, cy)]
         try:
-            msp.add_solid(pts + [pts[0]], dxfattribs={"layer": layer})
+            msp.add_solid(pts, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": layer})
 

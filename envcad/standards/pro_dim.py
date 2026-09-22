@@ -128,13 +128,13 @@ class ProDim:
         """绘制实心箭头"""
         s = self._arrow_size
         if direction == 'right':
-            pts = [(x, y), (x-s, y-s*0.3), (x-s, y+s*0.3), (x, y)]
+            pts = [(x, y), (x-s, y-s*0.3), (x-s, y+s*0.3)]
         elif direction == 'left':
-            pts = [(x, y), (x+s, y-s*0.3), (x+s, y+s*0.3), (x, y)]
+            pts = [(x, y), (x+s, y-s*0.3), (x+s, y+s*0.3)]
         elif direction == 'up':
-            pts = [(x, y), (x-s*0.3, y-s), (x+s*0.3, y-s), (x, y)]
+            pts = [(x, y), (x-s*0.3, y-s), (x+s*0.3, y-s)]
         elif direction == 'down':
-            pts = [(x, y), (x-s*0.3, y+s), (x+s*0.3, y+s), (x, y)]
+            pts = [(x, y), (x-s*0.3, y+s), (x+s*0.3, y+s)]
         else:
             return
         self.msp.add_solid(pts, dxfattribs={'layer': layer})
@@ -155,7 +155,7 @@ class ProDim:
         """
         size = 3
         if direction == 'down':
-            pts = [(x, y), (x-size, y-size), (x+size, y-size), (x, y)]
+            pts = [(x, y), (x-size, y-size), (x+size, y-size)]
             self.msp.add_solid(pts, dxfattribs={'layer': layer})
             self.msp.add_line((x+size, y-size), (x+size+15, y-size),
                              dxfattribs={'layer': layer})
@@ -163,7 +163,7 @@ class ProDim:
                 dxfattribs={'height': self._text_height, 'layer': '文字', 'style': self.text_style}
             ).set_placement((x+size+2, y-size+1))
         else:
-            pts = [(x, y), (x-size, y+size), (x+size, y+size), (x, y)]
+            pts = [(x, y), (x-size, y+size), (x+size, y+size)]
             self.msp.add_solid(pts, dxfattribs={'layer': layer})
             self.msp.add_line((x+size, y+size), (x+size+15, y+size),
                              dxfattribs={'layer': layer})

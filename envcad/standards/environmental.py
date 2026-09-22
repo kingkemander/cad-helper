@@ -121,7 +121,7 @@ def _tri_arrow(msp, tip, direction, scale, layer):
     pts = [(tx, ty), (tx - h * dx + px, ty - h * dy + py),
            (tx - h * dx - px, ty - h * dy - py)]
     try:
-        msp.add_solid(pts + [pts[0]], dxfattribs={"layer": layer})
+        msp.add_solid(pts, dxfattribs={"layer": layer})
     except Exception as _e:
         msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": layer})
 
@@ -280,7 +280,7 @@ def draw_flow_arrow(msp, start, end, scale: float = 100.0,
         tri = [(ex, ey), (ex - h * ux + px, ey - h * uy + py),
                (ex - h * ux - px, ey - h * uy - py)]
         try:
-            msp.add_solid(tri + [tri[0]], dxfattribs={"layer": layer})
+            msp.add_solid(tri, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(tri, close=True, dxfattribs={"layer": layer})
 

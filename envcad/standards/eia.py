@@ -477,7 +477,7 @@ def _tri_arrow(msp, tip, direction, scale, layer):
     pts = [(tx, ty), (tx - h * dx + px, ty - h * dy + py),
            (tx - h * dx - px, ty - h * dy - py)]
     try:
-        msp.add_solid(pts + [pts[0]], dxfattribs={"layer": layer})
+        msp.add_solid(pts, dxfattribs={"layer": layer})
     except Exception as _e:
         msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": layer})
 

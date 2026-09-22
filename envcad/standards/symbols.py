@@ -143,7 +143,7 @@ def draw_weld_symbol(msp, target, weld_type: str,
             tri_pts = [(sym_x, sym_y), (sym_x - tri_w / 2, sym_y + tri_h),
                        (sym_x + tri_w / 2, sym_y + tri_h)]
         try:
-            msp.add_solid(tri_pts + [tri_pts[0]], dxfattribs={"layer": layer})
+            msp.add_solid(tri_pts, dxfattribs={"layer": layer})
         except Exception as _e:
             msp.add_lwpolyline(tri_pts, close=True, dxfattribs={"layer": layer})
     else:
