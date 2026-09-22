@@ -248,3 +248,64 @@ def test_preview_empty_dir_raises(tmp_path):
 
     with pytest.raises(PreviewError):
         render_dir(str(tmp_path))
+
+
+# ── 交付收尾（体检 + 预览 + 清单） ────────────────────────────────
+
+def test_deliver_reports_audit_and_checklist(tmp_path):
+    """只回 dxf 路径对用户等于没交付——deliver 必须连预览 PNG 一起交代。"""
+    from envcad.audit import deliver
+    from envcad.drawings import t1_sewage_pipe, t2_settler
+
+    out = str(tmp_path / "dwg")
+    os.makedirs(out, exist_ok=True)
+    # 生成器返回值不统一：t1/t2 给单个 str，t4/t7~t13 给 list——deliver 都得能吃
+    dxfs = [t1_sewage_pipe.gen_t1(out), t2_settler.gen_t2(out, scale=50)]
+
+    text = deliver(out, dxfs, dpi=70)
+    assert "交付清单" in text
+    assert os.path.abspath(out) in text
+    # 体检结论要在，且预览图要真的落地
+    assert "可交付人工审核" in text or "✓" in text
+    assert "预览-全部.png" in text
+    assert "DXF 2 张" in text
+    assert os.path.getsize(os.path.join(out, "预览", "预览-全部.png")) > 2000
+
+
+def test_deliver_degrades_without_matplotlib(tmp_path, monkeypatch):
+    """预览是可选依赖：缺 matplotlib 只能降级提示，不能把已出的图纸吞掉。"""
+    import builtins
+    from envcad import preview as preview_mod
+    from envcad.audit import deliver
+    from envcad.drawings import t1_sewage_pipe
+
+    out = str(tmp_path / "dwg")
+    os.makedirs(out, exist_ok=True)
+    dxfs = t1_sewage_pipe.gen_t1(out)
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *a, **kw):
+        if name == "matplotlib" or name.startswith("matplotlib."):
+            raise ImportError("no matplotlib")
+        return real_import(name, *a, **kw)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(preview_mod, "check_cjk_font", lambda: True)
+    text = deliver(out, dxfs)
+    assert "预览未能生成" in text
+    assert "交付清单" in text
+    assert os.path.exists(dxfs[0])
+
+
+def test_deliver_counts_single_str_dxf_as_one(tmp_path):
+    """传 str 时不能按字符数计数（实测把 1 张图报成 154 张）。"""
+    from envcad.audit import deliver
+    from envcad.drawings import t1_sewage_pipe
+
+    out = str(tmp_path / "dwg")
+    os.makedirs(out, exist_ok=True)
+    single = t1_sewage_pipe.gen_t1(out)
+    assert isinstance(single, str)
+    text = deliver(out, single, preview=False)
+    assert "DXF 1 张" in text, text

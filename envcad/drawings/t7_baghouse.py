@@ -22,7 +22,7 @@ from ezdxf.enums import TextEntityAlignment
 
 from ..engine.dxf_base import new_drawing, save_dxf
 from ..standards.frame import FrameInfo, draw_frame, save_dxf_autofit
-from ..standards.annotate import _t, draw_flow_arrow
+from ..standards.annotate import _t
 from ..standards.legend import draw_legend
 from ..standards.baghouse import (
     draw_baghouse_elevation, draw_baghouse_plan, draw_baghouse_section,
@@ -30,7 +30,7 @@ from ..standards.baghouse import (
 )
 from ..design.env_process import design_baghouse_full
 from . import (draw_tech_notes, draw_spec_table, draw_material_table,
-                   aux_column)
+                   aux_column, draw_flow_chain, flow_notes_below)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0     # 技术要求框宽(图纸mm)
@@ -213,35 +213,18 @@ def _s7_flow(out_dir, scale, p, project):
     s = scale
 
     stages = ["集气罩", "风管", "袋式除尘器", "离心风机", "烟囱排放"]
-    n = len(stages)
-    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
-    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
-    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
-    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
-    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
-    bx = x0 + 6000
-    by = y0 + 16000
-    for i, st in enumerate(stages):
-        cx0 = bx + i * (bw + gap)
-        msp.add_lwpolyline([(cx0, by), (cx0 + bw, by), (cx0 + bw, by + bh_),
-                            (cx0, by + bh_)], close=True, dxfattribs={"layer": "工艺"})
-        _t(msp, st, (cx0 + bw / 2, by + bh_ / 2), 3 * s, align=MC,
-           layer="文字", tracker=tracker)
-        if i < len(stages) - 1:
-            ax0 = cx0 + bw
-            draw_flow_arrow(msp, (ax0, by + bh_ / 2), (gap, 0), scale,
-                            length=8.0, label="", tracker=tracker)
-    # 说明文字居中于**流程图**（旧写法锚 refit 前图框的水平中心，图缩短后
-    # 会远远飘在图的右侧，把内容包络又拉宽）
-    _t(msp, f"系统处理风量 {p['air_flow']:.0f} m³/h",
-       (bx + (n * (bw + gap) - gap) / 2, by - 6 * s), 3 * s, align=MC,
-       layer="文字-标题", tracker=tracker)
-    aux_column(msp, s, tracker).add(draw_tech_notes, "工艺流程说明",
-                    ["含尘气体经集气罩收集，由风管送入袋式除尘器。",
+    # 框宽按 A4 横的可用宽度自动均分、框高 55mm，说明框移到流程图正下方并撑满
+    # 同宽（见 draw_flow_chain / flow_notes_below）。旧写法是 34×24mm 小框横排 +
+    # 说明框贴右侧另起一列，内容包络被拉成 250×40mm 细长条，实测占幅仅 8%。
+    flow = draw_flow_chain(msp, (x0 + 6000, y0 + 16000), stages, s, tracker=tracker)
+    # 旁路说明放在流程图正上方（左对齐于流程图左边界，不撑宽内容包络）
+    _t(msp, f"系统处理风量 {p['air_flow']:.0f} m³/h", (flow[0], flow[3] + 8 * s), 2.5 * s,
+       layer="文字", tracker=tracker)
+    flow_notes_below(msp, flow, s, "工艺流程说明", ["含尘气体经集气罩收集，由风管送入袋式除尘器。",
                      f"净化后气体经离心风机由烟囱排放，出口≤{p['limit']}mg/m³。",
                      "除尘器收集的粉尘经卸料装置定期外运。",
-                     "系统负压运行，风机置于除尘器后（清洁侧）。"],
-                    width=TECH_W, tracker=tracker)
+                     "系统负压运行，风机置于除尘器后（清洁侧）。"], tracker=tracker)
+
     return save_dxf_autofit(doc, os.path.join(out_dir, "BH-07_工艺流程图.dxf"), scale, info, tracker)
 
 

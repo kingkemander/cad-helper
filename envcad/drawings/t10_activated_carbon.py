@@ -15,7 +15,7 @@ from ezdxf.enums import TextEntityAlignment
 
 from ..engine.dxf_base import new_drawing, save_dxf
 from ..standards.frame import FrameInfo, draw_frame, save_dxf_autofit
-from ..standards.annotate import _t, draw_flow_arrow
+from ..standards.annotate import _t
 from ..standards.legend import draw_legend
 from ..standards.activated_carbon import (
     draw_ac_elevation, draw_ac_plan, draw_ac_section,
@@ -23,7 +23,7 @@ from ..standards.activated_carbon import (
 )
 from ..design.env_process import design_activated_carbon_full
 from . import (draw_tech_notes, draw_spec_table, draw_material_table,
-                   aux_column)
+                   aux_column, draw_flow_chain, flow_notes_below)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0
@@ -179,31 +179,18 @@ def _s7_flow(out_dir, scale, p, project):
     x0, y0, x1, y1, info = _frame(doc, scale, "VOC治理工艺流程图", "AC-07", project, tracker)
     s = scale
     stages = ["VOC废气", "预过滤", "活性炭吸附", "风机", "排气筒"]
-    n = len(stages)
-    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
-    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
-    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
-    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
-    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
-    bx = x0 + 6000
-    by = y0 + 16000
-    for i, st in enumerate(stages):
-        cx0 = bx + i * (bw + gap)
-        msp.add_lwpolyline([(cx0, by), (cx0 + bw, by), (cx0 + bw, by + bh_),
-                            (cx0, by + bh_)], close=True, dxfattribs={"layer": "工艺"})
-        _t(msp, st, (cx0 + bw / 2, by + bh_ / 2), 3 * s, align=MC, layer="文字", tracker=tracker)
-        if i < n - 1:
-            draw_flow_arrow(msp, (cx0 + bw, by + bh_ / 2), (gap, 0), scale,
-                            length=8.0, label="", tracker=tracker)
-    _t(msp, f"饱和炭 → 蒸汽脱附 → 溶剂回收",
-       (bx + 2 * (bw + gap) + bw / 2, by + bh_ + 5 * s), 2.5 * s, align=MC,
+    # 框宽按 A4 横的可用宽度自动均分、框高 55mm，说明框移到流程图正下方并撑满
+    # 同宽（见 draw_flow_chain / flow_notes_below）。旧写法是 34×24mm 小框横排 +
+    # 说明框贴右侧另起一列，内容包络被拉成 250×40mm 细长条，实测占幅仅 8%。
+    flow = draw_flow_chain(msp, (x0 + 6000, y0 + 16000), stages, s, tracker=tracker)
+    # 旁路说明放在流程图正上方（左对齐于流程图左边界，不撑宽内容包络）
+    _t(msp, f"饱和炭 → 蒸汽脱附 → 溶剂回收", (flow[0], flow[3] + 8 * s), 2.5 * s,
        layer="文字", tracker=tracker)
-    aux_column(msp, s, tracker).add(draw_tech_notes, "工艺流程说明",
-                    [f"VOC废气预过滤后入活性炭罐吸附，VOC {p['voc_in']:.0f}→{p['voc_out']}mg/m³。",
+    flow_notes_below(msp, flow, s, "工艺流程说明", [f"VOC废气预过滤后入活性炭罐吸附，VOC {p['voc_in']:.0f}→{p['voc_out']}mg/m³。",
                      "活性炭吸附饱和后蒸汽脱附再生，循环使用。",
                      "净化气经风机由排气筒达标排放。",
-                     f"去除率≥{p['eff']*100:.0f}%，适用于低浓度大风量VOC。"],
-                    width=TECH_W, tracker=tracker)
+                     f"去除率≥{p['eff']*100:.0f}%，适用于低浓度大风量VOC。"], tracker=tracker)
+
     return save_dxf_autofit(doc, os.path.join(out_dir, "AC-07_工艺流程图.dxf"), scale, info, tracker)
 
 

@@ -15,7 +15,7 @@ from ezdxf.enums import TextEntityAlignment
 
 from ..engine.dxf_base import new_drawing, save_dxf
 from ..standards.frame import FrameInfo, draw_frame, save_dxf_autofit
-from ..standards.annotate import _t, draw_flow_arrow
+from ..standards.annotate import _t
 from ..standards.legend import draw_legend
 from ..standards.spray_tower import (
     draw_spray_tower_elevation, draw_spray_tower_plan, draw_spray_tower_section,
@@ -24,7 +24,7 @@ from ..standards.spray_tower import (
 )
 from ..design.env_process import design_spray_tower_full
 from . import (draw_tech_notes, draw_spec_table, draw_material_table,
-                   aux_column)
+                   aux_column, draw_flow_chain, flow_notes_below)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0
@@ -180,31 +180,18 @@ def _s7_flow(out_dir, scale, p, project):
     x0, y0, x1, y1, info = _frame(doc, scale, "脱硫工艺流程图", "ST-07", project, tracker)
     s = scale
     stages = ["锅炉烟气", "除尘器", "脱硫塔", "除雾器", "烟囱排放"]
-    n = len(stages)
-    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
-    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
-    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
-    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
-    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
-    bx = x0 + 6000
-    by = y0 + 16000
-    for i, st in enumerate(stages):
-        cx0 = bx + i * (bw + gap)
-        msp.add_lwpolyline([(cx0, by), (cx0 + bw, by), (cx0 + bw, by + bh_),
-                            (cx0, by + bh_)], close=True, dxfattribs={"layer": "工艺"})
-        _t(msp, st, (cx0 + bw / 2, by + bh_ / 2), 3 * s, align=MC, layer="文字", tracker=tracker)
-        if i < n - 1:
-            draw_flow_arrow(msp, (cx0 + bw, by + bh_ / 2), (gap, 0), scale,
-                            length=8.0, label="", tracker=tracker)
-    _t(msp, f"石灰石浆液制备 → 浆池循环  |  石膏脱水外运",
-       (bx + 2 * (bw + gap) + bw / 2, by + bh_ + 5 * s), 2.5 * s, align=MC,
+    # 框宽按 A4 横的可用宽度自动均分、框高 55mm，说明框移到流程图正下方并撑满
+    # 同宽（见 draw_flow_chain / flow_notes_below）。旧写法是 34×24mm 小框横排 +
+    # 说明框贴右侧另起一列，内容包络被拉成 250×40mm 细长条，实测占幅仅 8%。
+    flow = draw_flow_chain(msp, (x0 + 6000, y0 + 16000), stages, s, tracker=tracker)
+    # 旁路说明放在流程图正上方（左对齐于流程图左边界，不撑宽内容包络）
+    _t(msp, f"石灰石浆液制备 → 浆池循环  |  石膏脱水外运", (flow[0], flow[3] + 8 * s), 2.5 * s,
        layer="文字", tracker=tracker)
-    aux_column(msp, s, tracker).add(draw_tech_notes, "工艺流程说明",
-                    [f"烟气经除尘后入脱硫塔，SO2 {p['so2_in']:.0f}→{p['so2_out']}mg/m³。",
+    flow_notes_below(msp, flow, s, "工艺流程说明", [f"烟气经除尘后入脱硫塔，SO2 {p['so2_in']:.0f}→{p['so2_out']}mg/m³。",
                      "石灰石浆液喷淋吸收，生成石膏（CaSO4·2H2O）。",
                      "净化烟气经除雾器后由烟囱排放。",
-                     "脱硫效率≥95%，副产石膏综合利用。"],
-                    width=TECH_W, tracker=tracker)
+                     "脱硫效率≥95%，副产石膏综合利用。"], tracker=tracker)
+
     return save_dxf_autofit(doc, os.path.join(out_dir, "ST-07_工艺流程图.dxf"), scale, info, tracker)
 
 

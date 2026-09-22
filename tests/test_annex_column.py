@@ -208,8 +208,11 @@ def test_flow_diagram_boxes_are_paper_sized(tmp_path):
     """★ 流程图的框宽必须按**纸面尺寸**定，不许按默认图框宽度自适应。
 
     旧写法把 5 个框拉伸到默认 A2 的可用宽度（约 439mm × 60mm 一个框），
-    流程图自己就把幅面顶到 A2/A1。改后 5 个框总宽 ≈ 5*34+4*8 = 202mm。
+    流程图自己就把幅面顶到 A2/A1；改后总宽锚在 FLOW_TARGET_W_MM。
+    框高同理要按纸面 mm 定：旧版 24mm 高配 439mm 宽的"长条单行"把整张纸的
+    纵向空间全空着（实测占幅仅 7%），现锚 FLOW_BOX_H_MM。
     """
+    from envcad.drawings import FLOW_TARGET_W_MM, FLOW_BOX_H_MM
     from envcad.drawings import t7_baghouse
     t7_baghouse.gen_baghouse(str(tmp_path), level="C")
     msp = ezdxf.readfile(
@@ -222,11 +225,13 @@ def test_flow_diagram_boxes_are_paper_sized(tmp_path):
         p = list(e.get_points("xy"))
         xs, ys = [q[0] for q in p], [q[1] for q in p]
         w, h = (max(xs) - min(xs)) / 100.0, (max(ys) - min(ys)) / 100.0
-        if 10 < w < 60 and 10 < h < 40:              # 流程框（纸面 mm）
-            boxes.append((min(xs), w, h))
+        if 10 < w < 80 and 10 < h < 90:              # 流程框（纸面 mm）
+            boxes.append((min(xs) / 100.0, w, h))   # 统一换算到纸面 mm
     assert len(boxes) == 5, f"流程框数 {len(boxes)} != 5"
     for _, w, h in boxes:
-        assert w == pytest.approx(34.0, abs=0.5), f"流程框宽 {w}mm ≠ 34mm"
-        assert h == pytest.approx(24.0, abs=0.5), f"流程框高 {h}mm ≠ 24mm"
-    total = sum(w for _, w, _ in boxes)
-    assert total < 200.0, f"5 个流程框总宽 {total}mm 撑爆幅面"
+        assert h == pytest.approx(FLOW_BOX_H_MM, abs=0.5), f"流程框高 {h}mm"
+    # 框宽按目标纸宽均分：任意张数都撑满 FLOW_TARGET_W_MM，不留大片空白
+    span = max(a + w for a, w, _ in boxes) - min(a for a, _, _ in boxes)
+    assert span == pytest.approx(FLOW_TARGET_W_MM, abs=1.0), \
+        f"流程图总宽 {span}mm 未锚在纸面宽 {FLOW_TARGET_W_MM}mm"
+    assert span < 270.0, f"流程图总宽 {span}mm 撑爆幅面"

@@ -19,8 +19,8 @@ import os
 from ..engine.dxf_base import new_drawing, save_dxf, BBoxTracker
 from ..standards.frame import (FrameInfo, draw_frame, save_dxf_autofit,
                                    content_bbox)
-from ..standards.annotate import (_t, draw_flow_arrow, draw_elevation,
-                                  draw_pipe_diameter, _estimate_text_width)
+from ..standards.annotate import (_t, draw_flow_arrow, draw_flow_path,
+                                  draw_elevation, draw_pipe_diameter)
 from ..standards.legend import draw_legend
 from ..standards.layout import AuxColumn
 from ..standards.dim import draw_linear_dimension
@@ -41,7 +41,7 @@ from ..components.env_equipment import (
     draw_self_priming_pump, draw_submersible_pump,
     draw_mixer, draw_dosing_system, draw_clo2_generator,
 )
-from . import draw_tech_notes
+from . import draw_tech_notes, draw_material_table
 from ezdxf.enums import TextEntityAlignment
 
 # ─── 全局常量 ─────────────────────────────────────────
@@ -157,26 +157,41 @@ def _sheet1_general(out_dir, scale):
     unit_bbox = (ux0, uy0, ux0 + 18000, uy0 + 17500)
 
     # ── 流程箭头（格栅→调节→提升泵→接触氧化→沉淀→消毒→出水）──
-    # chain 每项 (sx, sy, ex, ey, 标签) 是**站区局部坐标下的起止点**。
-    # 注意 draw_flow_arrow 会把 direction 归一化，只画 length*scale 长，
-    # 因此这里必须按实际段长换算 length，否则所有箭头一律 800mm（实测"出水"
-    # 段只画到 x≈4500 就断，远未到指定终点 17000）。
-    # 末段"出水"自消毒池向东出至红线内：旧写法竖直向上 1500，箭尾越过红线
-    # 1000（红线顶在站区局部 y=18000），注记也飘到图外，并压住坐标网格注记。
-    # chain 每项 (sx, sy, ex, ey, 标签)：标签箭头符号必须与该段实际走向一致
-    # （按 dx/dy 判定），否则图上"→消毒"的箭头其实指向左上，读图会被误导。
-    chain = [
-        (1000, 1000, 1000, 2500, "→"),
-        (1000, 7500, 1000, 9000, "→"),
-        (6000, 11500, 12000, 5500, "↘沉淀"),
-        (12000, 8000, 4000, 15500, "↖消毒"),
-        (4000, 16000, 17000, 16000, "→出水"),
+    # 单段箭头：起止点是**站区局部坐标**，draw_flow_arrow 会把 direction 归一化、
+    # 只画 length*scale 长，因此必须按实际段长换算 length，否则所有箭头一律
+    # 800mm。标签用文字（"进水""提升"），不用 "→"——竖向箭头配横向箭头符号
+    # 会让人误读成向东流。
+    # 竖向连接段（格栅井→调节池、调节池→接触氧化池）两端都在池壁上，注记贴
+    # 箭头会落进池体里（实测"提升"压在接触氧化池内），故贴通道中点；"出水"
+    # 是排出口标记，仍贴箭头。
+    # avoid=False：坐标网格把整个红线区登记成"已占用"（site.draw_coord_grid
+    # 注册 rect 全包络），红线内任何开避让的文字都搜不到空位、直接走兜底
+    # "py + height*4"（实测 "+1120"），反而被推进池体。通道中线是设计选定的
+    # 位置，与池名/提升泵同一约定：只登记占位、不避让。
+    straight = [
+        (1000, 1000, 1000, 2500, "进水", "mid"),
+        (1000, 7500, 1000, 9000, "提升", "mid"),
+        (4000, 16000, 17000, 16000, "出水", "tip"),
     ]
-    for sx, sy, ex, ey, lbl in chain:
+    for sx, sy, ex, ey, lbl, at in straight:
         seg = math.hypot(ex - sx, ey - sy)
         draw_flow_arrow(msp, (ux0 + sx, uy0 + sy),
                         (ex - sx, ey - sy), scale,
-                        length=seg / scale, label=lbl, tracker=tracker)
+                        length=seg / scale, label=lbl,
+                        label_at=at, avoid=False, tracker=tracker)
+
+    # 折线路径：池体之间只留窄通道，直连两池进出口的长斜线会横切整个图面并
+    # 贴壁穿过通道（实测两条斜线在沉淀池前交叉，无法判断走向）。改走通道：
+    # 沉淀段沿 x=9000 竖向通道南下，从沉淀池西壁 y=5500 进入；消毒段沿
+    # x=10500 北上，沿接触氧化池与消毒池之间 y=15500 的通道西行入消毒池。
+    # 两条路径分列通道两侧，互不重叠，且不切任何池体。
+    paths = [
+        ([(6000, 11500), (9000, 11500), (9000, 5500), (12000, 5500)], "沉淀"),
+        ([(12000, 6500), (10500, 6500), (10500, 15500), (4000, 15500)], "消毒"),
+    ]
+    for pts, lbl in paths:
+        draw_flow_path(msp, [(ux0 + x, uy0 + y) for x, y in pts], scale,
+                       label=lbl, avoid=False, tracker=tracker)
 
     # 提升泵标记（调节池与接触氧化池之间的 1500 净距内，即工艺流程上的提升工位）
     # 必须 avoid=False：净距是预留的，且竖向坐标网格线正落在 x=ux0+2500 上，
@@ -466,19 +481,6 @@ def _sheet5_piping(out_dir, scale):
 
 # ═══════════════ 图6：设备材料表 ═══════════════
 
-def _table_text_w(text, h):
-    """表格列宽专用字宽（比 ``annotate._estimate_text_width`` 更保守）。
-
-    后者按 CJK 0.85em / ASCII 0.50em 估宽再乘 1.15 安全系数（≈ CJK 0.98em /
-    ASCII 0.58em）。实测出图字体下上标、单位符号一类仍会超出格子。表格里
-    "压字"比"列宽富余"严重得多，故这里取 CJK 1.00em / ASCII 0.62em。
-    """
-    w = 0.0
-    for ch in str(text):
-        w += h * (1.0 if ord(ch) > 127 else 0.65)
-    return w
-
-
 def _sheet6_material(out_dir, scale):
     doc, _, tracker = new_drawing(scale, return_tracker=True)
     msp = doc.modelspace()
@@ -514,59 +516,20 @@ def _sheet6_material(out_dir, scale):
         ("26", "三角堰板", "304不锈钢", "m", "18"),
     ]
 
-    ox, oy = x0 + MARGIN_EDGE + 2000, y1 - 6000
-
-    # ── 列宽按内容实算 ──
-    # 旧写法把列宽写死（8/24/36/10/10 图纸 mm），"SSR50 Q=2.5m³/min P=39.2kPa"
-    # 一类长规格串超出 36mm 列宽，于是触发 `_t` 的碰撞避让、把文字推离单元格，
-    # 整表白读。现按每列实际最大字宽定宽，并给单元格统一关掉避让（avoid=False）。
-    headers = ["序号", "名称", "规格", "单位", "数量"]
-    cell_h = 2.6 * s
-    head_h = 3.2 * s
-    col_pad = 8.0 * s                      # 单元格净空（左右各 4mm）
-    cols = []
-    for i, hd in enumerate(headers):
-        w = max([_table_text_w(hd, head_h)] +
-                [_table_text_w(r[i], cell_h) for r in rows])
-        cols.append(max(w + col_pad, 8 * s))
-    rh = 5.5 * s
-    title_h = 7 * s
-    total_w = sum(cols)
-
-    # 表头
-    cx = ox
-    for i, h in enumerate(headers):
-        _t(msp, h, (cx + cols[i] / 2, oy - title_h / 2 + 0.5 * s), head_h,
-           align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
-           tracker=tracker, avoid=False)
-        cx += cols[i]
-
-    msp.add_lwpolyline([(ox, oy), (ox + total_w, oy), (ox + total_w, oy - title_h),
-                        (ox, oy - title_h)], close=True, dxfattribs={"layer": "附表"})
-
-    for j in range(1, len(headers)):
-        xx = ox + sum(cols[:j])
-        msp.add_line((xx, oy), (xx, oy - title_h - len(rows) * rh), dxfattribs={"layer": "附表"})
-
-    # 数据行
-    for r, row in enumerate(rows):
-        ry = oy - title_h - r * rh
-        msp.add_line((ox, ry), (ox + total_w, ry), dxfattribs={"layer": "附表"})
-        cx = ox
-        for i, val in enumerate(row):
-            _t(msp, val, (cx + cols[i] / 2, ry - rh / 2 + 0.5 * s), cell_h,
-               align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
-               tracker=tracker, avoid=False)
-            cx += cols[i]
-
-    # 底线
-    bottom_y = oy - title_h - len(rows) * rh
-    msp.add_line((ox, bottom_y), (ox + total_w, bottom_y), dxfattribs={"layer": "附表"})
-    msp.add_line((ox, oy - title_h), (ox, oy - title_h - len(rows) * rh), dxfattribs={"layer": "附表"})
+    # ── 用共享的 draw_material_table ──
+    # 旧写法在这里另写了一套"按内容实算列宽"的表：列宽由内容决定，结果 26 行
+    # 的表只有百来毫米宽，贴在整张 A3 上占幅 17.9%（同"大纸上画小表"）。
+    # 共享函数按纸宽（MATERIAL_TABLE_W_MM）分配列宽、行高/字高用名义纸面 mm，
+    # 与 t7~t13 的 56 张设备材料表同一套版式。
+    ox, oy = x0 + MARGIN_EDGE, y1 - 2 * MARGIN_EDGE
+    _bb = draw_material_table(msp, (ox, oy), scale, rows, tracker)
 
     # 表名居中于表格（旧写法居中于 refit 前的整张图框，表名被甩到表格右侧很远）
-    _t(msp, "设备材料表", (ox + total_w / 2, bottom_y - 6 * s), 5 * s,
+    _t(msp, "设备材料表", ((_bb[0] + _bb[2]) / 2, _bb[1] - 6 * s), 5 * s,
        align=TextEntityAlignment.MIDDLE_CENTER, layer="文字-标题",
        tracker=tracker, avoid=False)
 
-    return save_dxf_autofit(doc, os.path.join(out_dir, "T4-06_设备材料表.dxf"), scale, info, tracker)
+    # 竖向排版：5 列 × 26 行的材料表天然是"高瘦"形，横排会把纸面宽出去一大截
+    # （横 A3 装不下、被抬到 A2 只占 22%）；竖排 A3 恰好装下，占幅 40%+。
+    return save_dxf_autofit(doc, os.path.join(out_dir, "T4-06_设备材料表.dxf"), scale, info,
+                            tracker, orientation="portrait")

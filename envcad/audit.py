@@ -378,5 +378,75 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     return 0 if all(r.ok for r in reports) else 1
 
 
+# —————————————— 交付收尾：体检 + 预览 + 清单 ——————————————
+
+def _as_path_list(dxfs) -> List[str]:
+    """把 dxfs 归一成路径列表。
+
+    各生成器返回值不统一（``gen_t1`` 返回单个 str，``gen_t4`` 返回 list），
+    调用方也很容易直接把单个路径传进来。若直接 ``len(dxfs)``，传 str 会数出
+    **字符数**（实测把 1 张图报成 154 张），传 Path 会数出路径段数。
+    """
+    if dxfs is None:
+        return []
+    if isinstance(dxfs, (str, bytes, os.PathLike)):
+        return [os.fspath(dxfs)]
+    return [os.fspath(p) for p in dxfs]
+
+
+def deliver(out_dir: str, dxfs=None,
+            *, preview: bool = True, dpi: int = 150) -> str:
+    """出图后的交付收尾，返回可直接打印/粘贴的交付说明。
+
+    只回 dxf 路径对用户等于没交付——用户手里没有 CAD 时看不了 dxf。这里把
+    "文件生成成功"接到"图纸能交付"：先跑体检（有问题照实写出来但不抛异常，
+    最终由人工审核拍板），再落全套 PNG + 总览图，最后给出交付清单。
+    刻意不 raise：体检/预览失败只应降级为提示，不能把已生成的图纸吞掉。
+    """
+    lines: List[str] = []
+    reports = []
+    try:
+        reports = audit_dir(out_dir)
+    except Exception as exc:                        # 体检不能阻断交付
+        lines.append(f"[提示] 体检未能完成：{exc}")
+    else:
+        if reports:
+            lines.append(format_report(reports))
+
+    pngs: List[str] = []
+    if preview:
+        try:
+            from .preview import render_dir, check_cjk_font, PreviewError
+        except Exception as exc:
+            lines.append(f"[提示] 预览模块不可用：{exc}")
+        else:
+            if not check_cjk_font():
+                lines.append("[提示] 未找到中文字体，预览里的汉字可能显示为方框。")
+            try:
+                pngs = render_dir(out_dir, os.path.join(out_dir, "预览"),
+                                  dpi=dpi, contact=True)
+            except PreviewError as exc:
+                lines.append(f"[提示] 预览未能生成（{exc}）；"
+                             "装 matplotlib 后可自动出图：pip install matplotlib")
+            except Exception as exc:
+                lines.append(f"[提示] 预览未能生成：{exc}")
+
+    n_dxf = len(_as_path_list(dxfs)) if dxfs is not None else len(reports)
+    lines.append("")
+    lines.append("— 交付清单（可直接发给用户）" + "—" * 20)
+    lines.append(f"图纸目录：{os.path.abspath(out_dir)}")
+    if pngs:
+        shots = [p for p in pngs if "预览-全部" not in p]
+        lines.append(f"DXF {n_dxf} 张，预览 PNG {len(pngs)} 张")
+        lines.append(f"单张预览：{os.path.abspath(shots[0])}（共 {len(shots)} 张）")
+        allpng = os.path.join(out_dir, "预览", "预览-全部.png")
+        if os.path.exists(allpng):
+            lines.append(f"总览图：{os.path.abspath(allpng)}")
+    else:
+        lines.append(f"DXF {n_dxf} 张（未出预览）")
+    lines.append("提示：dxf 需 CAD 打开，务必连同预览 PNG 一起交付。")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":                              # pragma: no cover
     raise SystemExit(main())

@@ -15,7 +15,7 @@ from ezdxf.enums import TextEntityAlignment
 
 from ..engine.dxf_base import new_drawing, save_dxf
 from ..standards.frame import FrameInfo, draw_frame, save_dxf_autofit
-from ..standards.annotate import _t, draw_flow_arrow
+from ..standards.annotate import _t
 from ..standards.legend import draw_legend
 from ..standards.duct import (
     draw_duct_plan, draw_duct_elevation, draw_duct_elbow,
@@ -23,7 +23,7 @@ from ..standards.duct import (
 )
 from ..design.env_process import design_duct_full
 from . import (draw_tech_notes, draw_spec_table, draw_material_table,
-                   aux_column)
+                   aux_column, draw_flow_chain, flow_notes_below)
 
 MC = TextEntityAlignment.MIDDLE_CENTER
 TECH_W = 95.0
@@ -169,27 +169,14 @@ def _s7_flow(out_dir, scale, p, project):
     x0, y0, x1, y1, info = _frame(doc, scale, "废气收集系统流程图", "DU-07", project, tracker)
     s = scale
     stages = ["集气罩", "支风管", "主风管", "治理设备", "风机"]
-    n = len(stages)
-    # 框宽/框高按**纸面尺寸**定（34×24mm 框、8mm 间距），不再按 refit 前的
-    # 默认图框宽度自适应：旧写法把 5 个框拉伸到整张默认 A2 的可用宽度
-    # （约 439mm × 60mm 一个框），流程图自己就把幅面顶到 A2/A1，
-    # refit 再没有缩幅面的余地。乘 s 保证任何比例尺下纸面尺寸一致。
-    bw, gap, bh_ = 34 * s, 8 * s, 24 * s
-    bx = x0 + 6000
-    by = y0 + 16000
-    for i, st in enumerate(stages):
-        cx0 = bx + i * (bw + gap)
-        msp.add_lwpolyline([(cx0, by), (cx0 + bw, by), (cx0 + bw, by + bh_),
-                            (cx0, by + bh_)], close=True, dxfattribs={"layer": "工艺"})
-        _t(msp, st, (cx0 + bw / 2, by + bh_ / 2), 3 * s, align=MC, layer="文字", tracker=tracker)
-        if i < n - 1:
-            draw_flow_arrow(msp, (cx0 + bw, by + bh_ / 2), (gap, 0), scale,
-                            length=8.0, label="", tracker=tracker)
-    aux_column(msp, s, tracker).add(draw_tech_notes, "收集系统说明",
-                    [f"各集气罩废气经支风管汇入主管（Φ{p['dn']:.0f}）。",
+    # 框宽按 A4 横的可用宽度自动均分、框高 55mm，说明框移到流程图正下方并撑满
+    # 同宽（见 draw_flow_chain / flow_notes_below）。旧写法是 34×24mm 小框横排 +
+    # 说明框贴右侧另起一列，内容包络被拉成 250×40mm 细长条，实测占幅仅 8%。
+    flow = draw_flow_chain(msp, (x0 + 6000, y0 + 16000), stages, s, tracker=tracker)
+    flow_notes_below(msp, flow, s, "收集系统说明", [f"各集气罩废气经支风管汇入主管（Φ{p['dn']:.0f}）。",
                      "主管风速 10~15m/s，防粉尘沉积。",
-                     "系统负压运行，风机置于治理设备后。"],
-                    width=TECH_W, tracker=tracker)
+                     "系统负压运行，风机置于治理设备后。"], tracker=tracker)
+
     return save_dxf_autofit(doc, os.path.join(out_dir, "DU-07_工艺流程图.dxf"), scale, info, tracker)
 
 

@@ -335,6 +335,13 @@ def _list_domains():
     print(f"  详见 SKILL.md 文档中的 import 示例\n")
 
 
+def _deliver(out_dir: str, paths) -> None:
+    """出图后的交付收尾（体检 + 预览 + 清单），逻辑在 audit.deliver。"""
+    from .audit import deliver
+    print()
+    print(deliver(out_dir, paths))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="envcad",
@@ -349,6 +356,8 @@ def main(argv=None):
         os.path.expanduser("~"), "Desktop", "envcad-output"))
     test_p.add_argument("--scale", type=float, default=None)
     test_p.add_argument("--cad", default=None)
+    test_p.add_argument("--preview", action="store_true",
+                        help="出图后顺手落全套 PNG + 总览图（交付给用户看的）")
 
     # 批量命令
     batch_p = sub.add_parser("batch", help="JSON配置批量出图")
@@ -721,6 +730,8 @@ def main(argv=None):
     if args.command == "test":
         paths = _run(args.test, args.out, args.scale, args.cad)
         print(f"完成 {len(paths)} 张图 -> {args.out}")
+        if getattr(args, "preview", False):
+            _deliver(args.out, paths)
         return 0
 
     elif args.command == "all":

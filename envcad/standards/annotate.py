@@ -287,8 +287,15 @@ def draw_flow_arrow(msp, start, direction, scale: float,
                     length: float = 12.0, label: str = None,
                     angle_deg: float = None,
                     label_side: str = "above",
+                    label_at: str = "tip",
+                    avoid: bool = True,
                     tracker=None):
-    """水流方向箭头 v1.4：标签智能偏置。"""
+    """水流方向箭头 v1.4：标签智能偏置。
+
+    label_at="tip" 贴箭头（默认，历史行为）；"mid" 贴线段中点侧方——总平面上
+    池体之间的连接段两端都落在池壁上，贴箭头会让注记落进池体里（实测"提升"
+    落在接触氧化池内），此时改贴通道中点。
+    """
     s = scale
     sx, sy = _round_xy(*start)
 
@@ -306,16 +313,54 @@ def draw_flow_arrow(msp, start, direction, scale: float,
     if label:
         # 标签放在箭头侧上方
         perp_x, perp_y = -dy, dx  # 垂直向量
-        lx = end[0] + perp_x * 4 * s
-        ly = end[1] + perp_y * 4 * s
-        if label_side == "above":
-            lx = end[0] + dx * 2 * s + perp_x * 4 * s
-            ly = end[1] + dy * 2 * s + perp_y * 4 * s
+        if label_at == "mid":
+            lx = sx + dx * length * s / 2.0 + perp_x * 4 * s
+            ly = sy + dy * length * s / 2.0 + perp_y * 4 * s
+        else:
+            lx = end[0] + perp_x * 4 * s
+            ly = end[1] + perp_y * 4 * s
+            if label_side == "above":
+                lx = end[0] + dx * 2 * s + perp_x * 4 * s
+                ly = end[1] + dy * 2 * s + perp_y * 4 * s
         _t(msp, label, (lx, ly), 2.8 * s,
            align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
-           tracker=tracker)
+           tracker=tracker, avoid=avoid)
 
     return end
+
+
+def draw_flow_path(msp, points, scale: float, label: str = None,
+                   tracker=None, layer: str = "流向",
+                   label_perp: int = 1, head: float = 2.0,
+                   avoid: bool = True):
+    """沿折点绘制水流路径（正交折线）+ 末端实心箭头。
+
+    总平面图上池体之间只剩窄通道，直连两池进出口的长斜线会横切整个图面、
+    贴壁穿过通道，读图时看不出水从哪进哪出。工程习惯是沿构筑物之间的通道
+    走正交折线：`points` 为**绝对坐标**折点序列，前几段为直线、末段带箭头，
+    `label` 贴末段中点外侧（`label_perp=+1` 在行进方向左侧，-1 在右侧）。
+    """
+    s = scale
+    pts = [_round_xy(*p) for p in points]
+    if len(pts) < 2:
+        return pts[-1] if pts else None
+
+    for a, b in zip(pts, pts[1:-1]):
+        msp.add_line(a, b, dxfattribs={"layer": layer})
+    _arrow(msp, pts[-2], pts[-1], s, layer=layer, head=head)
+
+    if label:
+        (ax_, ay_), (bx_, by_) = pts[-2], pts[-1]
+        mx, my = (ax_ + bx_) / 2.0, (ay_ + by_) / 2.0
+        dx, dy = bx_ - ax_, by_ - ay_
+        n = math.hypot(dx, dy) or 1.0
+        px = -dy / n * label_perp
+        py = dx / n * label_perp
+        _t(msp, label, (mx + px * 4 * s, my + py * 4 * s), 2.8 * s,
+           align=TextEntityAlignment.MIDDLE_CENTER, layer="文字",
+           tracker=tracker, avoid=avoid)
+
+    return pts[-1]
 
 
 # —————————————— 箭头绘制 ───────────────────────────────
