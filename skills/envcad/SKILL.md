@@ -184,6 +184,33 @@ After generating drawings, always run the verification script:
 ```
 
 This checks every DXF for required annotations, layers, and entity counts.
+**v1.5.10 起它还会自动跑一遍"出图体检"**（幅面 / 比例尺自洽 / 压框 / 压标题栏 /
+文字叠印 / 条目错行 / 真实尺寸数），任一项不过就返回码 1。
+
+### 交付前必做：出图体检 + 出图预览
+
+图纸生成出来只是"文件存在"，**能不能交付要看体检和预览**。这两步是硬门槛：
+
+```bash
+# 1) 体检：幅面是否虚涨、比例尺声明与实测是否一致、内容有没有压框/压标题栏、
+#    文字有没有叠印、编号条目有没有错行。返回码 0=全过 / 1=有问题 / 2=没找到 dxf
+{PYTHON} -c "import sys; sys.path.insert(0,'.'); sys.argv=['envcad','check',r'D:\drawings']; from envcad.cli import main; main()"
+
+# 加 --strict 把"告警"也当不通过；--verbose 打印每条问题的坐标；--json 给机器读
+{PYTHON} -c "import sys; sys.path.insert(0,'.'); sys.argv=['envcad','check',r'D:\drawings','--strict','--verbose']; from envcad.cli import main; main()"
+
+# 2) 预览：把 DXF 渲染成 PNG。用户通常打不开 DXF，交付时要给图让他"看得见"
+{PYTHON} -c "import sys; sys.path.insert(0,'.'); sys.argv=['envcad','preview',r'D:\drawings','--out',r'D:\drawings\preview']; from envcad.cli import main; main()"
+
+# 一张总览图（所有图拼成联系表），适合发聊天里让用户快速过一遍
+{PYTHON} -c "import sys; sys.path.insert(0,'.'); sys.argv=['envcad','preview',r'D:\drawings','--out',r'D:\drawings\preview','--contact']; from envcad.cli import main; main()"
+```
+
+预览需要 `matplotlib`（可选依赖，未装时 `preview` 会给出明确提示；`check` 和
+出图本身**不需要**它）。
+
+**交付话术**：不要只回"已生成 xxx.dxf"。要回"已生成 N 张，体检全部通过，
+预览图在 xxx"，并把总览图贴出来。
 
 ### Push to CAD Software
 
@@ -398,14 +425,20 @@ draw_control_valve(msp, (vx, vy), "globe", actuator="pneumatic",
 
 1. Understand what drawings the user needs (match to T1-T5 or build custom)
 2. Generate with `envcad <test>` or Python API
-3. Run `verify.py` to confirm correctness
-4. If requested, push to CAD with `--cad autocad`
-5. Present results: list generated files with paths
+3. Run `verify.py` to confirm correctness (含出图体检)
+4. Run `envcad check <dir>`；不过就改到过，**不要**把不通过的图交出去
+5. Run `envcad preview <dir> --out <dir> --contact` 生成预览图
+6. If requested, push to CAD with `--cad autocad`
+7. Present results: 文件路径**以及预览图**（用户打不开 DXF，只列路径等于没交付）
 
 ## Important: Always Verify
 
 After ANY drawing generation, run `verify.py`. Never skip this step.
 Report verification results to the user: PASS/FAIL status for each drawing.
+
+Then run `envcad check <dir>` (幅面/比例尺/压框/叠印) and `envcad preview <dir>`
+(出 PNG)。**"文件生成成功"不等于"图纸能交付"**——一张内容压住标题栏、
+比例尺写成 1:100 实际是 1:137 的图，文件也是"成功"的，但交给客户就是事故。
 
 ## Python Environment
 

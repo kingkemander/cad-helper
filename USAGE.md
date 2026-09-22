@@ -85,6 +85,33 @@ python -m envcad.cli test all --out D:\测试输出
 python -m envcad.cli test t1 --out D:\测试输出
 ```
 
+### 6. 出图体检（交付门槛）
+
+出图只保证"文件生成"，不保证"图纸能用"。体检查四类会直接导致返工的硬伤：
+**幅面虚涨 / 比例尺声明与实测不一致 / 内容压框压标题栏 / 文字叠印与条目错行**。
+
+```bash
+python -m envcad.cli check D:\测试输出
+python -m envcad.cli check D:\测试输出 --strict --verbose
+python -m envcad.cli check D:\测试输出 --json
+```
+
+返回码：`0` 全过 / `1` 有问题 / `2` 目录下没有 DXF。`--strict` 把告警也当不通过。
+
+### 7. 出图预览（把 DXF 变成看得见的 PNG）
+
+用户/客户一般打不开 DXF。交付时除了文件路径，还应该给预览图。
+
+```bash
+python -m envcad.cli preview D:\测试输出 --out D:\测试输出\preview
+python -m envcad.cli preview D:\测试输出 --out D:\测试输出\preview --contact
+python -m envcad.cli preview D:\测试输出 --out D:\测试输出\preview --dpi 200
+```
+
+`--contact` 额外拼一张总览图（所有图纸的联系表），适合发在聊天里快速通览。
+预览按图框裁切、自动取景，图纸本体不裁边。需要 `matplotlib`（可选依赖）；
+未安装时只有 `preview` 不可用，出图与 `check` 不受影响。
+
 ---
 
 ## 三、批量出图 JSON 配置格式

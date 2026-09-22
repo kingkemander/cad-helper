@@ -661,6 +661,22 @@ def main(argv=None):
     block_p.add_argument("--save", action="store_true", help="保存结果到 knowledge/web_cache/")
     block_p.add_argument("--max", type=int, default=8, help="最大结果数")
 
+    # 出图体检（交付前必跑）
+    check_p = sub.add_parser(
+        "check", help="出图体检：幅面/比例尺/压框/压标题栏/文字叠印/真实尺寸")
+    check_p.add_argument("path", help="目录或单个 dxf")
+    check_p.add_argument("--strict", action="store_true",
+                         help="把'拥挤但未叠印'也算问题")
+    check_p.add_argument("--verbose", "-v", action="store_true", help="逐条列出问题")
+    check_p.add_argument("--json", action="store_true", help="输出 JSON")
+
+    # 出图预览（让用户看得见）
+    prev_p = sub.add_parser("preview", help="DXF 渲染成 PNG 预览（可拼总览图）")
+    prev_p.add_argument("path", help="目录或单个 dxf")
+    prev_p.add_argument("--out", default=None, help="PNG 输出目录")
+    prev_p.add_argument("--dpi", type=int, default=150)
+    prev_p.add_argument("--contact", action="store_true", help="另出一张拼图总览")
+
     # 脱硫塔输入条件
     equip_p.add_argument("--so2", type=float, default=2000.0, help="[脱硫]入口SO2 mg/m³")
     equip_p.add_argument("--lg", type=float, default=15.0, help="[脱硫]液气比 L/m³")
@@ -675,6 +691,32 @@ def main(argv=None):
     equip_p.add_argument("--pressure", type=float, default=2500.0, help="[风机]全压 Pa")
 
     args = ap.parse_args(argv)
+
+    if args.command == "check":
+        from .audit import main as audit_main
+        return audit_main([args.path]
+                          + (["--strict"] if args.strict else [])
+                          + (["--verbose"] if args.verbose else [])
+                          + (["--json"] if args.json else []))
+
+    if args.command == "preview":
+        from .preview import render_dir, render_dxf, check_cjk_font
+        if not check_cjk_font():
+            print("[提示] 未找到中文字体，预览里的汉字可能显示为方框。"
+                  "macOS 一般自带；Linux 可装 fonts-wqy-zenhei。")
+        if os.path.isdir(args.path):
+            pngs = render_dir(args.path, args.out, dpi=args.dpi,
+                              contact=args.contact)
+        else:
+            out = args.out
+            if out and not out.lower().endswith(".png"):
+                out = os.path.join(out, os.path.splitext(
+                    os.path.basename(args.path))[0] + ".png")
+            pngs = [render_dxf(args.path, out, dpi=args.dpi)]
+        print(f"完成 {len(pngs)} 张预览：")
+        for p in pngs:
+            print(f"  {p}")
+        return 0
 
     if args.command == "test":
         paths = _run(args.test, args.out, args.scale, args.cad)

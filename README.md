@@ -78,7 +78,18 @@ envcad t2 --out D:\drawings --scale 50
 
 # 生成后推送到 AutoCAD（COM 桥接）
 envcad all --cad autocad
+
+# 出图体检：幅面 / 比例尺自洽 / 压框 / 压标题栏 / 文字叠印 / 图面利用率
+envcad check D:\drawings --verbose
+
+# 出图预览：DXF → PNG（用户打不开 DXF，交付要带图）
+envcad preview D:\drawings --out D:\drawings\preview --contact
 ```
+
+> **交付前必跑 `check`**：`verify.py` 只查"必需标注在不在"，查不出会让客户
+> 直接退单的硬伤（幅面虚涨、标题栏写 1:100 实测 1:137、内容压标题栏、文字
+> 叠印、说明框条目错行）。`envcad check` 把这些变成一条命令，返回码 0 才可交付。
+> `preview` 需要可选依赖 `matplotlib`；出图与 `check` 不需要它。
 
 Python API：
 

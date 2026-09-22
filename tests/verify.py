@@ -7,10 +7,46 @@ import sys
 import ezdxf
 
 
+def _dim_text(doc, dim):
+    """DIMENSION 的显示文字。
+
+    B 档起部分标注由"手工线 + 手写文字"升级为真实 DIMENSION 实体，文字由
+    ezdxf 按 DIMSTYLE 现场算出，模型空间里**没有对应的 TEXT**。只查 TEXT 会
+    把这类标注误判成"内容缺失"（例：T2 的"总高 5.5m"变成 5500 的竖向尺寸）。
+    """
+    raw = str(dim.dxf.get("text", "") or "").strip()
+    try:
+        meas = dim.get_measurement()
+    except Exception:
+        meas = None
+    if meas is None:
+        return "" if raw == "<>" else raw
+    dec = 0
+    try:
+        dec = int(doc.dimstyles.get(dim.dxf.dimstyle).dxf.get("dimdec", 0))
+    except Exception:
+        pass
+    s = f"{meas:.{dec}f}"
+    if not raw:
+        return s
+    return raw.replace("<>", s) if raw != "<>" else s
+
+
 def texts(path):
+    """模型空间里"人眼能看到"的全部文字：TEXT + MTEXT + 尺寸块测量值。"""
     d = ezdxf.readfile(path)
     m = d.modelspace()
-    return [t.dxf.text for t in m.query("TEXT")], d, m
+    out = [str(t.dxf.text) for t in m.query("TEXT")]
+    for t in m.query("MTEXT"):
+        try:
+            out.append(t.plain_text())
+        except Exception:
+            out.append(str(t.text))
+    for dim in m.query("DIMENSION"):
+        s = _dim_text(d, dim)
+        if s:
+            out.append(s)
+    return out, d, m
 
 
 def has(all_text, kw):
@@ -49,9 +85,9 @@ def main():
     # T1
     all_ok &= check("T1 污水管道标注", os.path.join(out, "T1_污水管道标注图.dxf"),
                     ["DN300", "1.200", "1.176", "0.4%", "水流方向", "技术要求"])
-    # T2
+    # T2：总高原先是手写文字"总高 5.5m"，B 档起改为真实竖向尺寸 5500
     all_ok &= check("T2 竖流斜管沉淀池", os.path.join(out, "T2_竖流斜管沉淀池平剖面图.dxf"),
-                    ["沉淀池", "5.5", "1.5", "1.2", "DN300", "DN150",
+                    ["沉淀池", "5500", "6000", "1.5", "1.2", "DN300", "DN150",
                      "出水堰", "安装技术要求"])
     # T3
     all_ok &= check("T3 污水自流管网", os.path.join(out, "T3_污水自流管网平面布置图.dxf"),
@@ -83,6 +119,22 @@ def main():
                      "GS-01", "TJC-01", "检查井", "格栅井", "化粪池", "调节池",
                      "HDPE", "水流方向", "管底标高", "图  例",
                      "施工技术要求", "水力校验", "GB 50268"])
+
+    # ── 出图体检 ──
+    # 上面只查"关键字在不在"，查不出会让图纸报废的硬伤：幅面虚涨、
+    # 比例尺不自洽、内容压框/压标题栏、文字叠印、条目错行。这里补上。
+    print("\n==== 出图体检（幅面 / 比例尺 / 压框 / 叠印 / 条目）====")
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from envcad.audit import audit_dir, format_report
+        reports = audit_dir(out)
+        if reports:
+            print(format_report(reports))
+            all_ok &= all(r.ok for r in reports)
+        else:
+            print(f"  （{out} 下没有 dxf，跳过）")
+    except Exception as e:                             # 体检本身出错不算图纸不过
+        print(f"[WARN] 体检未执行：{e}")
 
     print("\n==== 总结 ====")
     print("全部通过" if all_ok else "存在未通过项")
