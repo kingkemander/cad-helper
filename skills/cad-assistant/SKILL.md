@@ -83,7 +83,7 @@ python3 ".../bootstrap-v1.5.14.py" --workspace "<WORKSPACE>" --proxy http://127.
 | `envcad list` | 识别到 **52 个领域模块**（不是 19 个，别按旧数字判断） |
 | 实测出图 | 生成 `T2_竖流斜管沉淀池平剖面图.dxf`，约 **75–80 KB** |
 | 文件可读 | 用 ezdxf 读回，DXF 版本 `AC1032`，模型空间 80+ 个实体 |
-| 智能体 | `<WORKSPACE>/.opencode/agents/AutoCAD 助手.md` 存在，含 `mode: all` |
+| 智能体 | `<WORKSPACE>/.opencode/agents/AutoCAD助手.md` 存在，含 `mode: all` |
 | 绑定指针 | `<WORKSPACE>/.spaceagents/plugins/cad-assistant/current.json` 存在且四个路径字段有效 |
 
 失败时**原样贴出最近输出并停下**，不要吞掉错误，也不要把上游 bug 说成"安装失败"。
@@ -138,7 +138,7 @@ cd "$(python3 -c "import json,pathlib;print(json.load(open(pathlib.Path('<WORKSP
 
 ```bash
 rm -rf ~/凹凸CAD助手1.5                                   # 安装目录（源码 + venv + 产出）
-rm -f  "<WORKSPACE>/.opencode/agents/AutoCAD 助手.md"      # 智能体
+rm -f  "<WORKSPACE>/.opencode/agents/AutoCAD助手.md"      # 智能体
 rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 # 若开过自动更新，先卸载定时任务：
 # "<安装目录>/.venv/bin/python" "<安装目录>/app/tools/setup_autoupdate.py" uninstall
