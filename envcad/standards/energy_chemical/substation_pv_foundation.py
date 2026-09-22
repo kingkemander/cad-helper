@@ -28,6 +28,7 @@ from typing import Optional, Sequence
 from ezdxf.enums import TextEntityAlignment
 
 from envcad.standards import building, electrical
+from envcad.standards.site import draw_north_arrow
 
 from . import _common as C
 
@@ -178,13 +179,17 @@ def draw_substation_plan(msp, x: float, y: float, scale: float = 200.0,
         C.text(msp, f"{voltage_lv}配电装置楼", (cb_x0 + cw / 2, cb_y0 + cd / 2),
                3.5, s, layer=C.L_TEXT)
 
-    # ── 指北针（GB/T 50001 §7）──
-    nx, ny = x1 + fence_offset - 4000.0, y1 + fence_offset - 4000.0
-    nr = 2000.0
-    msp.add_circle((nx, ny), nr, dxfattribs={"layer": C.L_THIN})
-    C.solid_tri(msp, [(nx, ny + nr * 1.25), (nx - nr * 0.30, ny - nr * 0.75),
-                      (nx + nr * 0.30, ny - nr * 0.75)], layer=C.L_THICK)
-    C.eng_text(msp, "N", (nx, ny + nr * 1.62), 4.0, s, layer=C.L_TITLE)
+    # ── 指北针（GB/T 50001—2017 §7）──
+    # 旧写法把半径写死 2000 模型 mm：1:200 时直径只有 20mm、1:100 时变 40mm，
+    # 图纸比例一变符号就不合规格；指针也画成尖端在圆外（尖在 ny+nr*1.25、
+    # 底边在 ny-nr*0.75），不是 GB/T 50001 的常用画法。改用
+    # ``site.draw_north_arrow``：直径按纸面 24mm 定、随比例尺自动缩放，指针
+    # 尖端在圆顶、尾边在圆底，尾部宽度取直径的 1/8（见 site.D_NORTH_DIA）。
+    # 圆心从围墙内角再向内退 24 纸面 mm：圆半径 12mm + "N"字底边留白，
+    # 保证整个符号（含 N）落在围墙线以内。
+    _n_off = C.P(24.0, s)
+    draw_north_arrow(msp, (x1 + fence_offset - _n_off, y1 + fence_offset - _n_off),
+                     s, label_h=4.0)
 
     # ── 标注 ──
     if with_dims:
@@ -193,7 +198,10 @@ def draw_substation_plan(msp, x: float, y: float, scale: float = 200.0,
         C.dim_linear(msp, (x0, y0), (x0, y1), offset=22, scale=s,
                      label=f"{int(site_depth)}")
 
-    C.eng_text(msp, tag, (x0 + site_width / 2, y1 + fence_offset + C.P(14, s)),
+    # 站名/站号立在围墙上沿：两行间距必须 > 0.8×(字高1+字高2)，否则出图体检
+    # 会按 1.6 倍字高的文字外框判成"文字叠印"（旧写法 14-7=7mm 间距 vs
+    # 0.8×(5+4)=7.2mm 需求，实差 0.2mm 被判叠印、整张图过不了交付门槛）。
+    C.eng_text(msp, tag, (x0 + site_width / 2, y1 + fence_offset + C.P(16, s)),
                5.0, s, layer=C.L_TITLE)
     C.text(msp, name, (x0 + site_width / 2, y1 + fence_offset + C.P(7, s)),
            4.0, s, layer=C.L_TITLE)
