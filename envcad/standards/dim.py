@@ -165,14 +165,28 @@ def add_dim_style_tolerance(doc, dimstyle_name: str,
     return dimstyle_name
 
 
+def _archtick_scale(s: float) -> float:
+    """把纸面斜短线长度换算成 ``dimasz``（模型单位）。
+
+    ``_ARCHTICK`` 块自身长 √2，尺寸匿名块以 ``dimasz`` 为插入比例，所以
+    ``画出来 = √2 × dimasz``。要纸面 2~3mm，dimasz = 2.5/√2 ≈ 1.768mm。
+    算法与 :mod:`envcad.standards.styles` 共用一份常量，避免两处各写一个值。
+    """
+    from .styles import archtick_dimasz
+    return archtick_dimasz(s)
+
+
 def _dim_base_override(s: float) -> dict:
     """真实 DIMENSION 实体所需的样式变量基线（图纸 mm → 模型单位）。
 
     本引擎的模型空间按 1:1 实物尺寸作图，图纸上的 mm 量需乘出图比例倒数 s。
+
+    ★ 这里**不含** ``dimasz`` / ``dimblk``——起止符按 §11.1.4 分两族
+      （线性用 45° 斜短线、径向用箭头），长度反算公式也不同，故由
+      :func:`_linear_override` / :func:`_radial_override` 各自补齐。
     """
     return {
         "dimtxt": 3.5 * s,      # 标注文字高 3.5mm（GB/T 14691）
-        "dimasz": 2.5 * s,      # 箭头长度 2.5mm
         "dimexe": 2.0 * s,      # 尺寸界线超出尺寸线 2mm
         "dimexo": 1.2 * s,      # 尺寸界线起点偏移
         "dimgap": 1.5 * s,      # 文字与尺寸线间隙
@@ -182,13 +196,40 @@ def _dim_base_override(s: float) -> dict:
     }
 
 
-def ensure_dimstyle(doc, scale: float, name: str = "") -> str:
+def _linear_override(s: float) -> dict:
+    """线性/对齐尺寸的 override：§11.1.4 的 45° 中粗斜短线起止符。
+
+    ``_ARCHTICK`` 块内长 √2，画出来 = √2 × dimasz，故按 TICK_LEN_MM 反算，
+    使纸面长度落在规范的 2~3mm。
+    """
+    from .styles import TICK_BLOCK
+    return {**_dim_base_override(s),
+            "dimasz": _archtick_scale(s),
+            "dimblk": TICK_BLOCK}
+
+
+def _radial_override(s: float) -> dict:
+    """半径/直径/角度/弧长尺寸的 override：§11.1.4 的实心闭合箭头。
+
+    ``_CLOSEDFILLED`` 块内长 1.0，画出来长度就等于 dimasz；按"箭头宽度
+    b ≥ 1mm"反算得 ARROW_LEN_MM ≈3.04mm（详见 :mod:`envcad.standards.styles`）。
+    """
+    from .styles import ARROW_BLOCK, arrow_dimasz
+    return {**_dim_base_override(s),
+            "dimasz": arrow_dimasz(s),
+            "dimblk": ARROW_BLOCK}
+
+
+def ensure_dimstyle(doc, scale: float, name: str = "", arrow: bool = False) -> str:
     """返回一个可用的标注样式名。
 
     优先用调用方指定名 → 否则 `GB-DIM-{scale}`（缺失则现场创建）。
     裸 ezdxf 文档（无 HZ 文字样式）也能安全使用：会先补文字样式。
+
+    arrow=True 时改取 §11.1.4 的**径向**样式 `GB-DIM-ARROW-{scale}`
+    （起止符是实心闭合箭头，不是斜短线）。
     """
-    from .styles import setup_text_styles, setup_dimstyles
+    from .styles import setup_text_styles, setup_dimstyles, setup_arrow_dimstyle
 
     if "HZ" not in doc.styles:
         try:
@@ -196,11 +237,13 @@ def ensure_dimstyle(doc, scale: float, name: str = "") -> str:
         except Exception:
             pass
 
-    want = name or f"GB-DIM-{int(scale)}"
+    want = name or (f"GB-DIM-ARROW-{int(scale)}" if arrow
+                    else f"GB-DIM-{int(scale)}")
     if want in doc.dimstyles:
         return want
     try:
-        got = setup_dimstyles(doc, scale)
+        got = (setup_arrow_dimstyle(doc, scale) if arrow
+               else setup_dimstyles(doc, scale))
         if got in doc.dimstyles:
             return got
     except Exception:
@@ -259,7 +302,7 @@ def draw_linear_dimension(msp, p1: Tuple[float, float], p2: Tuple[float, float],
         base = (min(x1, x2) - off, (y1 + y2) / 2)
 
     style = ensure_dimstyle(msp.doc, s, dimstyle)
-    ov = _dim_base_override(s)
+    ov = _linear_override(s)
     if upper or lower:
         _apply_tolerance(ov, upper, lower, sym)
 
@@ -371,13 +414,17 @@ def draw_diameter_dimension(msp, center: Tuple[float, float], radius: float,
     直径前缀**不要自己加**——`ezdxf.render.dim_diameter` 的 `DiameterDimension`
     会自动带上 `Ø`（存盘时转义成 DXF 惯例的 `%%c`），自己再加会出现
     `⌀%%c6000` 这类重复前缀。
+
+    ★ 起止符按 §11.1.4 后半句用**箭头**（不是线性尺寸那种 45° 斜短线），
+      所以这里取 `GB-DIM-ARROW-{scale}` 样式。ezdxf 的 `add_diameter_dim`
+      会静默丢弃 `override=`，起止符只能由样式决定，故不能只靠 ov 切换。
     """
     s = float(scale)
     cx, cy = _r(*center)
     r_ = float(radius)
 
-    style = ensure_dimstyle(msp.doc, s, dimstyle)
-    ov = _dim_base_override(s)
+    style = ensure_dimstyle(msp.doc, s, dimstyle, arrow=True)
+    ov = _radial_override(s)
 
     # 首个 "<>" 会被替换为实测直径；prefix 仅在需要非 ⌀ 前缀时才传
     label = text if text else (prefix + "<>")

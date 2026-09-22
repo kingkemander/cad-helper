@@ -1,34 +1,94 @@
 {
   "meta": {
     "name": "CAD助手 规范知识库",
-    "version": "0.1.0-mvp",
-    "updated": "2026-07-31",
-    "schema": "十维度分类骨架 v1",
-    "description": "阶段1 MVP 雏形：先填建筑行业 GB/T 50001-2017 + GB/T 50106-2010 核心规则，供执行引擎与校验层消费",
+    "version": "0.2.0",
+    "updated": "2026-09-22",
+    "schema": "十维度分类骨架 v1 + 可执行审图注册表 v1",
+    "description": "规则库与审图引擎（envcad/gb_audit.py）的唯一数据来源。rules 供人读与生成器取参；complianceChecks 是可执行注册表，check_fn 必须与代码中的检查函数同名。",
     "dimensions": [
-      "Sheet", "Line", "Text", "Scale", "Symbol",
-      "AxisGrid", "Legend", "Method", "Dimension", "CADLayer"
-    ]
+      "Sheet",
+      "Line",
+      "Text",
+      "Scale",
+      "Symbol",
+      "AxisGrid",
+      "Legend",
+      "Method",
+      "Dimension",
+      "CADLayer"
+    ],
+    "disclaimer": "本库只收录「判据 + 条款号 + 溯源链接」，不含规范正文。规范全文版权属发布机构；条文核对源见 sources。标注 verified 的条目已逐条比对过原文，未标记者为待核对。"
   },
-
+  "sources": [
+    {
+      "id": "cabr-gb50001",
+      "name": "中国建筑科学研究院建筑防火研究所 · 规范库",
+      "url": "https://gf.cabr-fire.com/",
+      "kind": "条款核对源",
+      "note": "GB/T 50001-2017 的主编单位公开库，各章正文可在线阅读。仅用于逐条核对判据，不整篇入库、不再分发。"
+    },
+    {
+      "id": "samr-openstd",
+      "name": "国家标准全文公开系统",
+      "url": "https://openstd.samr.gov.cn/bzgk/gb/",
+      "kind": "官方目录",
+      "note": "多数制图类国标（GB/T 14689、GB/T 17450 等）因版权「暂不提供在线阅读」，只能核对标准号、名称与现行状态。"
+    }
+  ],
   "industries": {
     "building": {
       "name_cn": "工程建设",
       "base_standard": "GB/T 50001-2017",
-      "specialties": ["general_plan", "architecture", "structure", "water", "hvac"]
+      "specialties": [
+        "general_plan",
+        "architecture",
+        "structure",
+        "water",
+        "hvac"
+      ],
+      "rule_pack": "GB50001"
     },
     "mechanical": {
       "name_cn": "机械制造",
       "base_standard": "GB/T 17450-1998",
-      "specialties": ["mechanical_drawing"]
+      "specialties": [
+        "mechanical_drawing"
+      ],
+      "rule_pack": null,
+      "note": "GB/T 17450 未获可读条文，规则包待联网核对后补；当前仅套用 GB/T 50001 的通用条款。"
     },
     "electrical": {
       "name_cn": "电气电子",
       "base_standard": "GB/T 6988",
-      "specialties": ["schematic", "wiring"]
+      "specialties": [
+        "schematic",
+        "wiring"
+      ],
+      "rule_pack": null,
+      "note": "同上，规则包待补。"
+    },
+    "env_water": {
+      "name_cn": "环保·给排水",
+      "base_standard": "GB/T 50106-2010",
+      "specialties": [
+        "water_supply_drainage",
+        "wastewater_treatment"
+      ],
+      "rule_pack": null,
+      "note": "在 GB/T 50001 通用条款之外，还需 GB/T 50106（建筑给水排水制图标准）与 HJ 系列排污口/工艺图要求；条文待核对。"
+    },
+    "energy_chemical": {
+      "name_cn": "能源化工",
+      "base_standard": "GB/T 50001-2017",
+      "specialties": [
+        "pfd",
+        "pid",
+        "equipment_layout"
+      ],
+      "rule_pack": null,
+      "note": "PFD/PID 图例另有 HG/T 20519 系列（化工工艺设计施工图内容和深度）等；条文待核对。"
     }
   },
-
   "standards": [
     {
       "id": "GB/T 50001-2017",
@@ -36,109 +96,346 @@
       "scope": "通用基础",
       "industry": "building",
       "status": "现行",
-      "replaces": "GB/T 50001-2001"
+      "replaces": "GB/T 50001-2001",
+      "verified": true,
+      "source": "cabr-gb50001"
+    },
+    {
+      "id": "GB/T 14689-2008",
+      "name_cn": "技术制图 图纸幅面和规格",
+      "scope": "通用基础",
+      "industry": "building",
+      "status": "现行",
+      "verified": false,
+      "source": "samr-openstd",
+      "note": "官方平台不提供在线阅读；幅面数值经 GB/T 50001-2017 表 3.1.1 转述核对。"
     },
     {
       "id": "GB/T 50106-2010",
       "name_cn": "建筑给水排水制图标准",
       "scope": "专业-给排水",
-      "industry": "building",
+      "industry": "env_water",
       "status": "现行",
-      "replaces": "GB/T 50106-2001"
+      "replaces": "GB/T 50106-2001",
+      "verified": false
     },
     {
       "id": "GB/T 50104-2010",
       "name_cn": "建筑制图标准",
       "scope": "专业-建筑",
       "industry": "building",
-      "status": "现行"
+      "status": "现行",
+      "verified": false
+    },
+    {
+      "id": "GB/T 17450-1998",
+      "name_cn": "技术制图 图线",
+      "scope": "通用基础",
+      "industry": "mechanical",
+      "status": "现行",
+      "verified": false,
+      "source": "samr-openstd",
+      "note": "官方平台不提供在线阅读。"
     }
   ],
-
   "rules": {
-
     "Sheet": [
       {
         "dim": "Sheet",
         "std": "GB/T 14689-2008 (GB/T 50001-2017 引用)",
         "clause": "幅面与格式",
-        "industry": ["building", "mechanical", "electrical", "env"],
+        "industry": [
+          "building",
+          "mechanical",
+          "electrical",
+          "env"
+        ],
         "name": "图纸幅面与留边（GB/T 14689-2008）",
         "param": {
-          "series": ["A0", "A1", "A2", "A3", "A4"],
+          "series": [
+            "A0",
+            "A1",
+            "A2",
+            "A3",
+            "A4"
+          ],
           "size_mm": {
-            "A0": { "w": 841, "h": 1189 },
-            "A1": { "w": 594, "h": 841 },
-            "A2": { "w": 420, "h": 594 },
-            "A3": { "w": 297, "h": 420 },
-            "A4": { "w": 210, "h": 297 }
+            "A0": {
+              "w": 841,
+              "h": 1189
+            },
+            "A1": {
+              "w": 594,
+              "h": 841
+            },
+            "A2": {
+              "w": 420,
+              "h": 594
+            },
+            "A3": {
+              "w": 297,
+              "h": 420
+            },
+            "A4": {
+              "w": 210,
+              "h": 297
+            }
           },
           "border_a_mm": 25,
-          "border_c_mm": {"A0": 10, "A1": 10, "A2": 10, "A3": 5, "A4": 5},
+          "border_c_mm": {
+            "A0": 10,
+            "A1": 10,
+            "A2": 10,
+            "A3": 5,
+            "A4": 5
+          },
           "border_e_mm_large": 20,
           "border_e_mm_small": 10,
           "default_size": "A2",
-          "note": "a=装订边(左)=25mm；c=其他三边：A0/A1/A2=10mm，A3/A4=5mm；e=非装订边(A0/A1=20，A2/A3/A4=10)。默认图幅A2。"
+          "note": "a=装订边(左)=25mm；c=其他三边：A0/A1/A2=10mm，A3/A4=5mm；e=非装订边(A0/A1=20，A2/A3/A4=10)。默认图幅A2。GB/T 50001-2017 §3.1.1 与 GB/T14689 一致。"
         },
         "cadExec": {
           "tool": "drawTitleBlock",
           "insertBlock": "图框_横式_A{0}",
-          "args": ["sheet"]
+          "args": [
+            "sheet"
+          ]
+        }
+      },
+      {
+        "dim": "Sheet",
+        "std": "GB/T 50001-2017",
+        "clause": "3.2.1",
+        "industry": [
+          "building"
+        ],
+        "name": "标题栏与对中标志",
+        "param": {
+          "required_items": [
+            "标题栏",
+            "图框线",
+            "幅面线",
+            "装订边线",
+            "对中标志"
+          ],
+          "center_mark_line_mm": 0.35,
+          "center_mark_out_mm": 5,
+          "metric_scale_total_mm": 100,
+          "metric_scale_step_mm": 10,
+          "title_block_layout": "尺寸/格式/分区由工程需要确定（§3.2.2），故标题栏内小字高不计入字高违规",
+          "note": "对中标志线宽 0.35mm；米制尺度总长 100mm、分格 10mm（仅需微缩复制时）。"
         }
       }
     ],
-
     "Line": [
       {
         "dim": "Line",
         "std": "GB/T 50001-2017",
         "clause": "4.0.1",
-        "industry": ["building"],
+        "industry": [
+          "building"
+        ],
         "name": "线宽组",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45597.htm",
         "param": {
-          "b_series_mm": [2.0, 1.4, 1.0, 0.7, 0.5, 0.35],
-          "ratio": { "thick": 1.0, "mid": 0.5, "thin": 0.25 },
+          "b_series_mm": [
+            1.4,
+            1.0,
+            0.7,
+            0.5
+          ],
+          "width_groups_mm": {
+            "1.4": [
+              1.4,
+              1.0,
+              0.7,
+              0.35
+            ],
+            "1.0": [
+              1.0,
+              0.7,
+              0.5,
+              0.25
+            ],
+            "0.7": [
+              0.7,
+              0.5,
+              0.35,
+              0.18
+            ],
+            "0.5": [
+              0.5,
+              0.35,
+              0.25,
+              0.13
+            ]
+          },
+          "group_order": [
+            "b",
+            "0.7b",
+            "0.5b",
+            "0.25b"
+          ],
           "minWidth_mm": 0.1,
-          "note": "每个图样先选定基本线宽b，再按4:2:1确定粗中细"
+          "note": "★ 2017 版修正：b 只从 1.4/1.0/0.7/0.5 中选取，取消了 0.35/0.25/0.18/0.13 作为基本线宽 b。旧版知识库把 b 系列写成 {2.0,1.4,1.0,0.7,0.5,0.35} 是错的（b 无 2.0；0.35 是 0.7b/0.5b 而非 b）。0.25b 一栏可取 0.13。图线宽度不应小于 0.1mm（§4.0.1 条文说明）。"
         },
         "cadExec": {
           "tool": "buildLineLayers",
           "layers": [
-            { "name": "粗实线", "lineweight": "=b", "linetype": "Continuous" },
-            { "name": "中实线", "lineweight": "=0.5b", "linetype": "Continuous" },
-            { "name": "细实线", "lineweight": "=0.25b", "linetype": "Continuous" },
-            { "name": "中虚线", "lineweight": "=0.5b", "linetype": "DASHED" },
-            { "name": "细单点长画线", "lineweight": "=0.25b", "linetype": "CENTER" },
-            { "name": "细双点长画线", "lineweight": "=0.25b", "linetype": "PHANTOM" }
+            {
+              "name": "粗实线",
+              "lineweight": "=b",
+              "linetype": "Continuous"
+            },
+            {
+              "name": "中实线",
+              "lineweight": "=0.5b",
+              "linetype": "Continuous"
+            },
+            {
+              "name": "细实线",
+              "lineweight": "=0.25b",
+              "linetype": "Continuous"
+            },
+            {
+              "name": "中虚线",
+              "lineweight": "=0.5b",
+              "linetype": "DASHED"
+            },
+            {
+              "name": "细单点长画线",
+              "lineweight": "=0.25b",
+              "linetype": "CENTER"
+            },
+            {
+              "name": "细双点长画线",
+              "lineweight": "=0.25b",
+              "linetype": "PHANTOM"
+            }
           ]
+        }
+      },
+      {
+        "dim": "Line",
+        "std": "GB/T 50001-2017",
+        "clause": "4.0.4",
+        "industry": [
+          "building"
+        ],
+        "name": "图框和标题栏线的宽度",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45597.htm",
+        "param": {
+          "A0_A1": {
+            "图框线": "b",
+            "标题栏外框线": "0.5b",
+            "对中标志": "0.5b",
+            "标题栏分格线": "0.25b",
+            "幅面线": "0.25b"
+          },
+          "A2_A3_A4": {
+            "图框线": "b",
+            "标题栏外框线": "0.7b",
+            "对中标志": "0.7b",
+            "标题栏分格线": "0.35b",
+            "幅面线": "0.35b"
+          },
+          "note": "★ 图框线（内框）必须等于基本线宽 b，是图纸上最粗的线；幅面线（外框）是细线。两者若共用同一图层，极易把内框画成细线。"
+        }
+      },
+      {
+        "dim": "Line",
+        "std": "GB/T 50001-2017",
+        "clause": "4.0.3",
+        "industry": [
+          "building"
+        ],
+        "name": "线宽组一致性",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45597.htm",
+        "param": {
+          "note": "同一张图纸内，相同比例的各图样应选用相同的线宽组。"
+        }
+      },
+      {
+        "dim": "Line",
+        "std": "GB/T 50001-2017",
+        "clause": "4.0.5",
+        "industry": [
+          "building"
+        ],
+        "name": "平行图例线净间隙",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45597.htm",
+        "param": {
+          "min_gap_mm": 0.2,
+          "note": "相互平行的图例线，净间隙不宜小于 0.2mm。"
+        }
+      },
+      {
+        "dim": "Line",
+        "std": "GB/T 50001-2017",
+        "clause": "4.0.10",
+        "industry": [
+          "building"
+        ],
+        "name": "图线不得与文字重叠",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45597.htm",
+        "param": {
+          "note": "图线不得与文字、数字或符号重叠、混淆，不可避免时应首先保证文字的清晰。"
         }
       },
       {
         "dim": "Line",
         "std": "GB/T 50106-2010",
         "clause": "2.1.1",
-        "industry": ["building"],
+        "industry": [
+          "env_water"
+        ],
         "name": "给排水线宽",
+        "verified": false,
         "param": {
-          "b_recommended_mm": [0.7, 1.0],
-          "note": "给排水专业基本线宽b宜为0.7或1.0mm"
+          "b_recommended_mm": [
+            0.7,
+            1.0
+          ],
+          "note": "给排水专业基本线宽 b 宜为 0.7 或 1.0mm（待联网核对原文）。"
         },
-        "cadExec": { "tool": "buildLineLayers", "override_b": [0.7, 1.0] }
+        "cadExec": {
+          "tool": "buildLineLayers",
+          "override_b": [
+            0.7,
+            1.0
+          ]
+        }
       }
     ],
-
     "Text": [
       {
         "dim": "Text",
         "std": "GB/T 50001-2017",
-        "clause": "5",
-        "industry": ["building"],
+        "clause": "5.0.2",
+        "industry": [
+          "building"
+        ],
         "name": "字体与字高",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45599.htm",
         "param": {
-          "height_series_mm": [3.5, 5, 7, 10, 14, 20, 28],
+          "height_series_mm": [
+            3.5,
+            5,
+            7,
+            10,
+            14,
+            20
+          ],
           "min_height_mm": 3.5,
           "chinese_font": "长仿宋",
-          "width_ratio": 0.7
+          "width_ratio": 0.7,
+          "note": "文字的字高应从表 5.0.2 选用（系列为 3.5/5/7/10/14/20…）；>10mm 宜用 Truetype。"
         },
         "cadExec": {
           "tool": "createTextStyle",
@@ -146,141 +443,436 @@
           "fontFile": "hztxt.shx",
           "widthFactor": 0.7
         }
+      },
+      {
+        "dim": "Text",
+        "std": "GB/T 50001-2017",
+        "clause": "5.0.3",
+        "industry": [
+          "building"
+        ],
+        "name": "字体种类与宽高比",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45599.htm",
+        "param": {
+          "max_font_kinds": 2,
+          "vector_width_ratio": 0.7,
+          "truetype_width_ratio": 1.0,
+          "print_line_mm": [
+            0.25,
+            0.35
+          ],
+          "note": "汉字宜优先 Truetype 宋体；用矢量字体时应为长仿宋。同一图纸字体种类不应超过两种。"
+        }
+      },
+      {
+        "dim": "Text",
+        "std": "GB/T 50001-2017",
+        "clause": "5.0.7",
+        "industry": [
+          "building"
+        ],
+        "name": "字母及数字字高下限",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45599.htm",
+        "param": {
+          "min_height_mm": 2.5,
+          "note": "图样及说明中的字母及数字，字高不应小于 2.5mm。注意与汉字下限 3.5mm 区分。"
+        }
+      },
+      {
+        "dim": "Text",
+        "std": "GB/T 50001-2017",
+        "clause": "5.0.10",
+        "industry": [
+          "building"
+        ],
+        "name": "小于1的数字写法",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45599.htm",
+        "param": {
+          "rule": "写出个位的 0，小数点用圆点，齐基准线书写",
+          "note": "应写 0.5 而非 .5。"
+        }
       }
     ],
-
     "Scale": [
       {
         "dim": "Scale",
         "std": "GB/T 50001-2017",
-        "clause": "6",
-        "industry": ["building"],
+        "clause": "6.0.4",
+        "industry": [
+          "building"
+        ],
         "name": "常用比例系列",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45601.htm",
         "param": {
-          "original": ["1:1"],
-          "reduction": ["1:2", "1:5", "1:10", "1:20", "1:50", "1:100", "1:150", "1:200", "1:500", "1:1000", "1:2000"],
-          "enlargement": ["2:1", "5:1", "10:1"]
+          "original": [
+            "1:1"
+          ],
+          "reduction": [
+            "1:2",
+            "1:5",
+            "1:10",
+            "1:20",
+            "1:50",
+            "1:100",
+            "1:150",
+            "1:200",
+            "1:500",
+            "1:1000",
+            "1:2000"
+          ],
+          "enlargement": [
+            "2:1",
+            "5:1",
+            "10:1"
+          ],
+          "note": "应优先采用表中常用比例。"
         },
-        "cadExec": { "tool": "setDimScale", "fromVar": "dimscale" }
+        "cadExec": {
+          "tool": "setDimScale",
+          "fromVar": "dimscale"
+        }
+      },
+      {
+        "dim": "Scale",
+        "std": "GB/T 50001-2017",
+        "clause": "6.0.3",
+        "industry": [
+          "building"
+        ],
+        "name": "比例的注写",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45601.htm",
+        "param": {
+          "position": "图名右侧，基准线取平",
+          "height": "比图名的字高小一号或二号",
+          "note": "§6.0.2 比例符号应为「:」，以阿拉伯数字表示。"
+        }
       },
       {
         "dim": "Scale",
         "std": "GB/T 50106-2010",
         "clause": "2.2",
-        "industry": ["building"],
+        "industry": [
+          "env_water"
+        ],
         "name": "给排水平面图常用比例",
+        "verified": false,
         "param": {
-          "plan_common": ["1:100", "1:150", "1:200", "1:50"],
-          "system_diagram": ["1:100", "1:200", "不按比例"]
+          "plan_common": [
+            "1:100",
+            "1:150",
+            "1:200",
+            "1:50"
+          ],
+          "system_diagram": [
+            "1:100",
+            "1:200",
+            "不按比例"
+          ]
         }
       }
     ],
-
     "Symbol": [
       {
         "dim": "Symbol",
         "std": "GB/T 50001-2017",
-        "clause": "7.1",
-        "industry": ["building"],
+        "clause": "7.1.4",
+        "industry": [
+          "building"
+        ],
         "name": "剖切符号",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45606.htm",
         "param": {
-          "line_width": "粗实线",
-          "length_mm": { "projection": 6, "section": 4 },
-          "index_format": "编号/所在图纸号"
+          "line_width": "粗实线，线宽宜为 b",
+          "length_mm": {
+            "position": [
+              6,
+              10
+            ],
+            "direction": [
+              4,
+              6
+            ]
+          },
+          "index_format": "编号/所在图纸号",
+          "note": "常用方法：剖切位置线 6~10mm，剖视方向线 4~6mm。国际通用法：索引圆直径 8~10mm，剖切线与符号线线宽 0.25b。"
         },
-        "cadExec": { "tool": "insertSectionSymbol", "block": "剖切符号" }
+        "cadExec": {
+          "tool": "insertSectionSymbol",
+          "block": "剖切符号"
+        }
       },
       {
         "dim": "Symbol",
         "std": "GB/T 50001-2017",
-        "clause": "7.4",
-        "industry": ["building"],
+        "clause": "7.4.3",
+        "industry": [
+          "building"
+        ],
+        "name": "指北针",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45617.htm",
+        "param": {
+          "shape": "圆形 + 指针",
+          "circle_diameter_mm": 24,
+          "line_width": "细实线",
+          "tail_width_mm": 3,
+          "tail_width_ratio_large": 0.125,
+          "label": "北 或 N",
+          "note": "圆直径宜为 24mm，用细实线绘制；指针尾部宽度宜为 3mm。需用较大直径绘制时，指针尾部宽度宜为直径的 1/8。"
+        },
+        "cadExec": {
+          "tool": "draw_north_arrow",
+          "block": "指北针"
+        }
+      },
+      {
+        "dim": "Symbol",
+        "std": "GB/T 50001-2017",
+        "clause": "7.4.1",
+        "industry": [
+          "building"
+        ],
+        "name": "对称符号",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45617.htm",
+        "param": {
+          "parallel_line_len_mm": [
+            6,
+            10
+          ],
+          "pair_gap_mm": [
+            2,
+            3
+          ],
+          "parallel_line_width": "0.5b",
+          "axis_line_width": "0.25b",
+          "overshoot_mm": [
+            2,
+            3
+          ]
+        }
+      },
+      {
+        "dim": "Symbol",
+        "std": "GB/T 50001-2017",
+        "clause": "7.4.5",
+        "industry": [
+          "building"
+        ],
+        "name": "变更云线与修改版次",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45617.htm",
+        "param": {
+          "revision_triangle_side_cm": 0.8,
+          "cloud_line_width": "0.7b",
+          "note": "修改版次符号宜为边长 0.8cm 的正等边三角形。"
+        }
+      },
+      {
+        "dim": "Symbol",
+        "std": "GB/T 50001-2017",
+        "clause": "11.8",
+        "industry": [
+          "building"
+        ],
         "name": "标高符号",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45707.htm",
         "param": {
           "shape": "等腰直角三角形",
-          "height_mm": 3,
-          "line_width": "细实线"
+          "line_width": "细实线",
+          "unit": "m，注写到小数点后第三位；总平面图可注写到第二位",
+          "zero": "±0.000",
+          "note": "§11.8.5 零点标高应注写成 ±0.000，正数不注「+」，负数注「-」。l 取适当长度、h 取适当高度，故无固定 mm 值。"
         },
-        "cadExec": { "tool": "insertElevation", "block": "标高符号" }
+        "cadExec": {
+          "tool": "insertElevation",
+          "block": "标高符号"
+        }
       }
     ],
-
     "AxisGrid": [
       {
         "dim": "AxisGrid",
         "std": "GB/T 50001-2017",
-        "clause": "8",
-        "industry": ["building"],
-        "name": "定位轴线",
+        "clause": "8.0.1",
+        "industry": [
+          "building"
+        ],
+        "name": "定位轴线画法",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45625.htm",
         "param": {
-          "circle_diameter_mm": 8,
-          "line_width": "细单点长画线",
-          "horizontal_label": ["1", "2", "3", "..."],
-          "vertical_label": ["A", "B", "C", "..."],
-          "skip_letters": ["I", "O", "Z"]
+          "line_width": "0.25b",
+          "linetype": "单点长画线",
+          "circle_line_width": "0.25b 实线",
+          "circle_diameter_mm": [
+            8,
+            10
+          ],
+          "note": "★ 轴线圆直径宜为 8mm~10mm（不是固定 8mm）；轴线用 0.25b 单点长画线；圆的圆心应在轴线的延长线或其折线上。"
         },
-        "cadExec": { "tool": "buildAxisGrid", "block": "轴线编号" }
+        "cadExec": {
+          "tool": "buildAxisGrid",
+          "block": "轴线编号"
+        }
+      },
+      {
+        "dim": "AxisGrid",
+        "std": "GB/T 50001-2017",
+        "clause": "8.0.3/8.0.4",
+        "industry": [
+          "building"
+        ],
+        "name": "轴线编号顺序与用字",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45625.htm",
+        "param": {
+          "horizontal": "阿拉伯数字，从左至右",
+          "vertical": "大写英文字母，从下至上",
+          "forbidden_letters": [
+            "I",
+            "O",
+            "Z"
+          ],
+          "case_rule": "不应以同一字母的大小写区分轴线号",
+          "note": "字母不足可用双字母或单字母加数字注脚。"
+        }
       }
     ],
-
     "Legend": [
       {
         "dim": "Legend",
         "std": "GB/T 50001-2017",
         "clause": "9",
-        "industry": ["building"],
+        "industry": [
+          "building"
+        ],
         "name": "建筑材料图例（节选）",
+        "verified": false,
         "param": {
           "items": {
-            "砖": { "pattern": "45°斜线", "line": "细实线", "spacing_mm": 4 },
-            "混凝土": { "pattern": "三角形点", "line": "细实线" },
-            "钢筋混凝土": { "pattern": "斜线+三角形点" },
-            "自然土壤": { "pattern": "齿状线" },
-            "夯实土壤": { "pattern": "平行斜线" },
-            "木材": { "pattern": "木纹" }
+            "砖": {
+              "pattern": "45°斜线",
+              "line": "细实线",
+              "spacing_mm": 4
+            },
+            "混凝土": {
+              "pattern": "三角形点",
+              "line": "细实线"
+            },
+            "钢筋混凝土": {
+              "pattern": "斜线+三角形点"
+            },
+            "自然土壤": {
+              "pattern": "齿状线"
+            },
+            "夯实土壤": {
+              "pattern": "平行斜线"
+            },
+            "木材": {
+              "pattern": "木纹"
+            }
           }
         },
-        "cadExec": { "tool": "applyHatch", "byMaterial": true }
+        "cadExec": {
+          "tool": "applyHatch",
+          "byMaterial": true
+        }
       },
       {
         "dim": "Legend",
         "std": "GB/T 50106-2010",
         "clause": "3",
-        "industry": ["building"],
+        "industry": [
+          "env_water"
+        ],
         "name": "给排水图例（节选）",
+        "verified": false,
         "param": {
           "pipes": {
-            "给水管": { "line": "中粗实线", "color": "蓝" },
-            "排水管": { "line": "中粗虚线", "color": "绿" },
-            "热水管": { "line": "中粗实线", "color": "红" }
+            "给水管": {
+              "line": "中粗实线",
+              "color": "蓝"
+            },
+            "排水管": {
+              "line": "中粗虚线",
+              "color": "绿"
+            },
+            "热水管": {
+              "line": "中粗实线",
+              "color": "红"
+            }
           },
-          "fittings": ["弯头", "三通", "四通", "阀门", "水表", "消火栓"],
-          "fixtures": ["洗脸盆", "大便器", "地漏", "检查口"]
+          "fittings": [
+            "弯头",
+            "三通",
+            "四通",
+            "阀门",
+            "水表",
+            "消火栓"
+          ],
+          "fixtures": [
+            "洗脸盆",
+            "大便器",
+            "地漏",
+            "检查口"
+          ]
         },
-        "cadExec": { "tool": "insertLegendBlock", "lib": "water" }
+        "cadExec": {
+          "tool": "insertLegendBlock",
+          "lib": "water"
+        }
       }
     ],
-
     "Method": [
       {
         "dim": "Method",
         "std": "GB/T 50001-2017",
-        "clause": "10",
-        "industry": ["building"],
+        "clause": "10.1",
+        "industry": [
+          "building"
+        ],
         "name": "图样画法",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45660.htm",
         "param": {
           "projection": "第一角正投影",
-          "section_line": "粗实线",
           "visible_outline": "粗实线",
-          "hidden_line": "中虚线"
+          "hidden_line": "中虚线",
+          "mirror_note": "用镜像投影法时应在图名后注写「镜像」二字"
+        }
+      },
+      {
+        "dim": "Method",
+        "std": "GB/T 50001-2017",
+        "clause": "14.0.1",
+        "industry": [
+          "building"
+        ],
+        "name": "制图方向与指北针",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45734.htm",
+        "param": {
+          "north": "指北针应指向绘图区的顶部，并在整套图纸中保持一致",
+          "axis_align": "正交平面图宜使定位轴线与图框边线平行"
         }
       },
       {
         "dim": "Method",
         "std": "GB/T 50106-2010",
         "clause": "4",
-        "industry": ["building"],
+        "industry": [
+          "env_water"
+        ],
         "name": "给排水图样画法",
+        "verified": false,
         "param": {
           "plan": "建筑给水排水平面图",
           "system_diagram": "管道系统图（轴测）",
@@ -288,19 +880,29 @@
         }
       }
     ],
-
     "Dimension": [
       {
         "dim": "Dimension",
         "std": "GB/T 50001-2017",
         "clause": "11.1",
-        "industry": ["building"],
-        "name": "尺寸起止符号",
+        "industry": [
+          "building"
+        ],
+        "name": "尺寸界线、尺寸线与起止符号",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45686.htm",
         "param": {
-          "type": "45°中粗短斜线",
-          "length_mm": 2,
-          "line_width": "0.5b",
-          "extension_beyond_mm": 2
+          "extension_line": "细实线，一端离开轮廓不小于 2mm，另一端超出尺寸线 2~3mm",
+          "dim_line": "细实线，也可超出尺寸界线 2~3mm",
+          "type": "45°中粗斜短线",
+          "length_mm": [
+            2,
+            3
+          ],
+          "line_width": "中粗",
+          "angular_dot_mm": 1.0,
+          "radius_arrow_min_mm": 1.0,
+          "note": "★ 线性尺寸起止符号用中粗斜短线（非箭头），倾斜方向与尺寸界线成顺时针 45°，长 2~3mm；半径/直径/角度/弧长宜用箭头；轴测图用小圆点（直径 1mm）。"
         },
         "cadExec": {
           "tool": "setDimStyle",
@@ -312,86 +914,543 @@
       {
         "dim": "Dimension",
         "std": "GB/T 50001-2017",
+        "clause": "11.2.2",
+        "industry": [
+          "building"
+        ],
+        "name": "尺寸单位",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45688.htm",
+        "param": {
+          "default_unit": "mm",
+          "exceptions": [
+            "标高",
+            "总平面"
+          ],
+          "exception_unit": "m",
+          "note": "除标高及总平面以米为单位外，其他必须以毫米为单位。"
+        },
+        "cadExec": {
+          "tool": "setDimStyle",
+          "dimunit_override": "m"
+        }
+      },
+      {
+        "dim": "Dimension",
+        "std": "GB/T 50001-2017",
+        "clause": "11.3.3",
+        "industry": [
+          "building"
+        ],
+        "name": "尺寸排列与布置",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45693.htm",
+        "param": {
+          "min_offset_from_outline_mm": 10,
+          "parallel_dim_spacing_mm": [
+            7,
+            10
+          ],
+          "note": "轮廓线以外的尺寸界线距最外轮廓不宜小于 10mm；平行排列的尺寸线间距宜 7~10mm 并保持一致。"
+        }
+      },
+      {
+        "dim": "Dimension",
+        "std": "GB/T 50001-2017",
         "clause": "11.8",
-        "industry": ["building"],
+        "industry": [
+          "building"
+        ],
         "name": "标高标注",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45707.htm",
         "param": {
           "unit_m": true,
           "precision": 3,
           "format": "±0.000",
-          "note": "单位为米，注至小数点后3位"
+          "note": "单位为米，注至小数点后 3 位（总平面图可 2 位）；零点标高应注写成 ±0.000。"
         },
-        "cadExec": { "tool": "setDimStyle", "dimunit_override": "m" }
+        "cadExec": {
+          "tool": "setDimStyle",
+          "dimunit_override": "m"
+        }
       },
       {
         "dim": "Dimension",
         "std": "GB/T 50106-2010",
         "clause": "2.4",
-        "industry": ["building"],
+        "industry": [
+          "env_water"
+        ],
         "name": "管径标注",
+        "verified": false,
         "param": {
           "unit_mm": true,
           "format": "DN{value}",
-          "examples": ["DN50", "DN100"],
-          "note": "以毫米计，加注DN"
+          "examples": [
+            "DN50",
+            "DN100"
+          ],
+          "note": "以毫米计，加注 DN（待联网核对原文）。"
         },
-        "cadExec": { "tool": "labelPipeDiameter" }
+        "cadExec": {
+          "tool": "labelPipeDiameter"
+        }
       }
     ],
-
     "CADLayer": [
       {
         "dim": "CADLayer",
         "std": "GB/T 50001-2017",
-        "clause": "13 + 附录B",
-        "industry": ["building"],
-        "name": "图层命名规则",
+        "clause": "13.0.1",
+        "industry": [
+          "building"
+        ],
+        "name": "图层命名基本规定",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45730.htm",
         "param": {
+          "charset": "汉字、英文字母、数字、连字符「-」",
+          "no_mix": "汉字与英文字母不得混用；同一工程不应同时使用汉字和英文字母两套命名格式",
           "format": "主组-子组-状态",
           "common_layers": [
-            "建筑-墙", "建筑-门窗", "建筑-楼梯",
-            "结构-梁", "结构-柱",
-            "给排水-管道", "给排水-设备",
+            "建筑-墙",
+            "建筑-门窗",
+            "建筑-楼梯",
+            "结构-梁",
+            "结构-柱",
+            "给排水-管道",
+            "给排水-设备",
             "暖通-风管",
-            "标注-尺寸", "标注-文字",
-            "轴线", "图框"
+            "标注-尺寸",
+            "标注-文字",
+            "轴线",
+            "图框"
           ]
         },
-        "cadExec": { "tool": "createLayers", "fromStandard": "附录B" }
+        "cadExec": {
+          "tool": "createLayers",
+          "fromStandard": "附录B"
+        }
+      },
+      {
+        "dim": "CADLayer",
+        "std": "GB/T 50001-2017",
+        "clause": "13.0.2",
+        "industry": [
+          "building"
+        ],
+        "name": "图层命名格式",
+        "verified": true,
+        "source": "https://gf.cabr-fire.com/article-45730.htm",
+        "param": {
+          "field_count": [
+            2,
+            5
+          ],
+          "separator": "-",
+          "cjk_field_chars": [
+            1,
+            3
+          ],
+          "latin_field_chars": [
+            1,
+            4
+          ],
+          "levels": [
+            "专业代码",
+            "主代码",
+            "次代码1",
+            "次代码2",
+            "状态代码"
+          ],
+          "note": "汉字图层每字段宜 1~3 个汉字；英文图层每字段 1~4 个字符，专业代码/状态代码各 1 字符。"
+        }
       }
     ]
   },
-
   "complianceChecks": [
     {
-      "id": "CHK-LINE-01",
+      "id": "GB50001-3.1.1-SHEET",
+      "std": "GB/T 50001-2017",
+      "clause": "3.1.1",
+      "dim": "Sheet",
+      "title": "图纸幅面及图框尺寸应对应标准幅面",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_sheet_size",
+      "param": {
+        "paper_mm": {
+          "A0": [
+            1189,
+            841
+          ],
+          "A1": [
+            841,
+            594
+          ],
+          "A2": [
+            594,
+            420
+          ],
+          "A3": [
+            420,
+            297
+          ],
+          "A4": [
+            297,
+            210
+          ]
+        }
+      },
+      "source": "https://gf.cabr-fire.com/article-45582.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-4.0.1-LINEWIDTH",
+      "std": "GB/T 50001-2017",
+      "clause": "4.0.1",
       "dim": "Line",
-      "rule": "实体线宽必须落在合规线宽组 {2.0,1.4,1.0,0.7,0.5,0.35} 之一",
-      "severity": "warning"
+      "title": "线宽应取自标准线宽系列，且不小于 0.1mm",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_line_widths",
+      "param": {
+        "allowed_mm": [
+          1.4,
+          1.0,
+          0.7,
+          0.5,
+          0.35,
+          0.25,
+          0.18,
+          0.13
+        ],
+        "min_mm": 0.1
+      },
+      "source": "https://gf.cabr-fire.com/article-45597.htm",
+      "verified": "2026-09-22"
     },
     {
-      "id": "CHK-LAYER-01",
-      "dim": "CADLayer",
-      "rule": "图层名应符合 GB/T 50001 附录B命名（主组-子组-状态）",
-      "severity": "error"
+      "id": "GB50001-4.0.3-LWGROUP",
+      "std": "GB/T 50001-2017",
+      "clause": "4.0.3",
+      "dim": "Line",
+      "title": "同一张图纸内相同比例的图样应选用相同的线宽组",
+      "severity": "warning",
+      "checkable": true,
+      "check_fn": "check_line_width_group",
+      "param": {
+        "tolerance_mm": 0.01
+      },
+      "source": "https://gf.cabr-fire.com/article-45597.htm",
+      "verified": "2026-09-22"
     },
     {
-      "id": "CHK-DIM-01",
-      "dim": "Dimension",
-      "rule": "建筑标注起止符号须为45°中粗短斜线（ARCHTICK），不可用箭头",
-      "severity": "error"
+      "id": "GB50001-4.0.4-FRAME-LW",
+      "std": "GB/T 50001-2017",
+      "clause": "4.0.4",
+      "dim": "Line",
+      "title": "图框线宽应为基本线宽 b",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_frame_line_width",
+      "param": {
+        "frame_line": "b"
+      },
+      "source": "https://gf.cabr-fire.com/article-45597.htm",
+      "verified": "2026-09-22"
     },
     {
-      "id": "CHK-TEXT-01",
+      "id": "GB50001-4.0.4-TITLE-LW",
+      "std": "GB/T 50001-2017",
+      "clause": "4.0.4",
+      "dim": "Line",
+      "title": "标题栏外框线宽 A2/A3/A4 取 0.7b、A0/A1 取 0.5b",
+      "severity": "warning",
+      "checkable": true,
+      "check_fn": "check_frame_line_width",
+      "param": {
+        "A0_A1": "0.5b",
+        "A2_A3_A4": "0.7b",
+        "elements": [
+          "标题栏外框线",
+          "对中标志"
+        ]
+      },
+      "source": "https://gf.cabr-fire.com/article-45597.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-4.0.4-TRIM-LW",
+      "std": "GB/T 50001-2017",
+      "clause": "4.0.4",
+      "dim": "Line",
+      "title": "幅面线宽 A2/A3/A4 宜取 0.35b、A0/A1 宜取 0.25b",
+      "severity": "warning",
+      "checkable": true,
+      "check_fn": "check_frame_line_width",
+      "param": {
+        "A0_A1": "0.25b",
+        "A2_A3_A4": "0.35b",
+        "elements": [
+          "幅面线"
+        ]
+      },
+      "source": "https://gf.cabr-fire.com/article-45597.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-4.0.4-MARK-LW",
+      "std": "GB/T 50001-2017",
+      "clause": "4.0.4",
+      "dim": "Line",
+      "title": "对中标志线宽 A2/A3/A4 宜取 0.7b、A0/A1 宜取 0.5b",
+      "severity": "warning",
+      "checkable": true,
+      "check_fn": "check_frame_line_width",
+      "param": {
+        "A0_A1": "0.5b",
+        "A2_A3_A4": "0.7b",
+        "elements": [
+          "对中标志"
+        ]
+      },
+      "source": "https://gf.cabr-fire.com/article-45597.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-4.0.10-OVERLAP",
+      "std": "GB/T 50001-2017",
+      "clause": "4.0.10",
+      "dim": "Line",
+      "title": "图线不得与文字、数字或符号重叠",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_line_text_overlap",
+      "param": {
+        "basis": "文字按其外框（1.6×字高）估，两两相交即判重叠"
+      },
+      "source": "https://gf.cabr-fire.com/article-45597.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-5.0.2-TEXTH",
+      "std": "GB/T 50001-2017",
+      "clause": "5.0.2",
       "dim": "Text",
-      "rule": "汉字字高不得小于3.5mm",
-      "severity": "error"
+      "title": "汉字字高不宜小于 3.5mm（应按表 5.0.2 选用）",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_text_heights",
+      "param": {
+        "min_cjk_mm": 3.5,
+        "scope": "仅「图样及说明」；标题栏按 §3.2.2 由工程自定，不计入"
+      },
+      "source": "https://gf.cabr-fire.com/article-45599.htm",
+      "verified": "2026-09-22"
     },
     {
-      "id": "CHK-AXIS-01",
+      "id": "GB50001-5.0.7-TEXTH",
+      "std": "GB/T 50001-2017",
+      "clause": "5.0.7",
+      "dim": "Text",
+      "title": "字母及数字的字高不应小于 2.5mm",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_text_heights",
+      "param": {
+        "min_num_mm": 2.5
+      },
+      "source": "https://gf.cabr-fire.com/article-45599.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-5.0.3-FONTS",
+      "std": "GB/T 50001-2017",
+      "clause": "5.0.3",
+      "dim": "Text",
+      "title": "同一图纸字体种类不应超过两种",
+      "severity": "warning",
+      "checkable": true,
+      "check_fn": "check_font_kinds",
+      "param": {
+        "max_kinds": 2
+      },
+      "source": "https://gf.cabr-fire.com/article-45599.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-5.0.10-LEADING0",
+      "std": "GB/T 50001-2017",
+      "clause": "5.0.10",
+      "dim": "Text",
+      "title": "数字小于 1 时应写出个位的 0",
+      "severity": "warning",
+      "checkable": true,
+      "check_fn": "check_leading_zero",
+      "param": {
+        "pattern": "小数点前紧跟非数字"
+      },
+      "source": "https://gf.cabr-fire.com/article-45599.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-8.0.1-AXISLINE",
+      "std": "GB/T 50001-2017",
+      "clause": "8.0.1",
       "dim": "AxisGrid",
-      "rule": "轴线编号圆圈直径宜为8mm，跳过I/O/Z字母",
-      "severity": "warning"
+      "title": "定位轴线应用 0.25b 单点长画线绘制",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_axis_linetype",
+      "param": {
+        "line_width": "0.25b",
+        "linetypes": [
+          "CENTER",
+          "DASHDOT",
+          "PHANTOM"
+        ]
+      },
+      "source": "https://gf.cabr-fire.com/article-45625.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-8.0.2-AXISCIRCLE",
+      "std": "GB/T 50001-2017",
+      "clause": "8.0.2",
+      "dim": "AxisGrid",
+      "title": "轴线编号圆直径宜为 8mm~10mm",
+      "severity": "warning",
+      "checkable": false,
+      "reason": "需先识别「轴线编号圆」的语义（圆内是否含轴线号、是否落在轴端延长线上），纯几何易与设备圆/详图索引圆混淆，误报风险高于收益",
+      "source": "https://gf.cabr-fire.com/article-45625.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-8.0.4-AXISLETTER",
+      "std": "GB/T 50001-2017",
+      "clause": "8.0.4",
+      "dim": "AxisGrid",
+      "title": "英文字母 I、O、Z 不得用作轴线编号",
+      "severity": "warning",
+      "checkable": false,
+      "reason": "同上：须先认定「这是轴线编号」才能判字母合法性，否则会把正文里单独的字母（图例、材料代号）误杀",
+      "source": "https://gf.cabr-fire.com/article-45625.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-7.4.3-NORTH",
+      "std": "GB/T 50001-2017",
+      "clause": "7.4.3",
+      "dim": "Symbol",
+      "title": "指北针圆直径宜为 24mm、指针尾宽宜为 3mm（大直径取 1/8）",
+      "severity": "warning",
+      "checkable": false,
+      "reason": "需先识别「这一段圆 + 三角是指北针」，跨图纸版本差异大；已在生成侧用 draw_north_arrow 固定实现，审图侧暂不做几何反认",
+      "source": "https://gf.cabr-fire.com/article-45617.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-11.1.4-DIMTICK",
+      "std": "GB/T 50001-2017",
+      "clause": "11.1.4",
+      "dim": "Dimension",
+      "title": "线性尺寸起止符号应为 45° 中粗斜短线（不得用箭头）",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_dim_tick",
+      "param": {
+        "dimblk_ok": [
+          "_ARCHTICK"
+        ],
+        "tick_len_mm": [
+          2,
+          3
+        ],
+        "non_linear_types": "半径/直径/角度/弧长宜用箭头，改由 GB50001-11.1.4-ARROWW 判宽度"
+      },
+      "source": "https://gf.cabr-fire.com/article-45686.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-11.1.4-DIMSIZE",
+      "std": "GB/T 50001-2017",
+      "clause": "11.1.4",
+      "dim": "Dimension",
+      "title": "尺寸起止符号长度应为 2~3mm",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_dim_tick",
+      "param": {
+        "tick_len_mm": [
+          2,
+          3
+        ],
+        "dimvar": "dimasz",
+        "scope": "仅线性/对齐/坐标尺寸的斜短线"
+      },
+      "source": "https://gf.cabr-fire.com/article-45686.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-11.1.4-ARROWW",
+      "std": "GB/T 50001-2017",
+      "clause": "11.1.4",
+      "dim": "Dimension",
+      "title": "半径/直径/角度/弧长起止符号用箭头，箭头宽度 b ≥ 1mm",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_dim_tick",
+      "param": {
+        "arrow_width_min_mm": 1.0,
+        "radial_types": "半径/直径/角度/弧长（dimtype & 0x0F ∈ 2,3,4,5）",
+        "width_from": "dimasz × 箭头块包围盒高 / 出图比例"
+      },
+      "source": "https://gf.cabr-fire.com/article-45686.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-11.3.3-DIMSPACING",
+      "std": "GB/T 50001-2017",
+      "clause": "11.3.3",
+      "dim": "Dimension",
+      "title": "平行尺寸线间距宜 7~10mm，尺寸界线距轮廓不宜小于 10mm",
+      "severity": "warning",
+      "checkable": false,
+      "reason": "需先把尺寸按平行关系聚成尺寸链再测间距；当前图纸的尺寸多为手工线+文字，聚类结果不可靠，待尺寸实体化后再做",
+      "source": "https://gf.cabr-fire.com/article-45693.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-13.0.1-LAYERNAME",
+      "std": "GB/T 50001-2017",
+      "clause": "13.0.1",
+      "dim": "CADLayer",
+      "title": "图层名称汉字与英文字母不得混用",
+      "severity": "error",
+      "checkable": true,
+      "check_fn": "check_layer_naming",
+      "param": {
+        "exempt_layers": [
+          "0",
+          "Defpoints"
+        ]
+      },
+      "source": "https://gf.cabr-fire.com/article-45730.htm",
+      "verified": "2026-09-22"
+    },
+    {
+      "id": "GB50001-13.0.2-LAYERFMT",
+      "std": "GB/T 50001-2017",
+      "clause": "13.0.2",
+      "dim": "CADLayer",
+      "title": "图层名应由 2~5 个字段组成、以「-」分隔，汉字字段 1~3 字",
+      "severity": "warning",
+      "checkable": false,
+      "reason": "实务中线宽层命名（粗实线/细实线-尺寸/图框）普遍存在且被行业接受，属「宜」级推荐；强判会大面积误杀，暂只登记不执行",
+      "source": "https://gf.cabr-fire.com/article-45730.htm",
+      "verified": "2026-09-22"
     }
   ]
 }

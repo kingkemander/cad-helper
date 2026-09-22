@@ -21,6 +21,10 @@ from ezdxf import bbox as _ezbbox
 from ezdxf.enums import TextEntityAlignment
 
 from ..engine.dxf_base import save_dxf
+from .layers import (FRAME_LINEWEIGHT_MM, MARK_LINEWEIGHT_MM,
+                     TITLE_OUTER_LINEWEIGHT_MM, TRIM_LINEWEIGHT_MM,
+                     BIG_MARK_LINEWEIGHT_MM, BIG_TRIM_LINEWEIGHT_MM,
+                     mm_to_lineweight)
 
 # ── 标准图幅（GB/T 14689）：(长边, 短边) mm，含装订边 ──
 PAPER_BASE = {
@@ -173,18 +177,27 @@ def draw_frame(doc, scale: float, info: FrameInfo, tracker=None, origin=(0.0, 0.
     def _P(x, y):
         return (x + ox, y + oy)
 
-    # 外框（图幅边界，细实线）
+    # 表 4.0.4 的四类线各有各的宽度，而它们同在"图框"层上：
+    # 幅面线 0.35b、图框线 b、对中标志 0.7b（A2/A3/A4；A0/A1 分别 0.25b/0.5b）。
+    # 所以只能逐实体给 lineweight，不能靠图层默认值——图层默认值只能有一个。
+    big = s in ("A0", "A1")
+    trim_lw = mm_to_lineweight(BIG_TRIM_LINEWEIGHT_MM if big else TRIM_LINEWEIGHT_MM)
+    mark_lw = mm_to_lineweight(BIG_MARK_LINEWEIGHT_MM if big else MARK_LINEWEIGHT_MM)
+
+    # 外框（幅面线，纸边；表 4.0.4 的 0.25b/0.35b）
     msp.add_lwpolyline([_P(0, 0), _P(W, 0), _P(W, H), _P(0, H)], close=True,
-                       dxfattribs={"layer": "图框"})
-    # 内框（图框线，粗实线）
+                       dxfattribs={"layer": "图框", "lineweight": trim_lw})
+    # 内框（图框线 = 基本线宽 b）
     x0, y0 = ml, mo
     x1, y1 = W - mo, H - mo
     msp.add_lwpolyline([_P(x0, y0), _P(x1, y0), _P(x1, y1), _P(x0, y1)], close=True,
-                       dxfattribs={"layer": "图框"})
-    # 对中标志（四边中点小三角，可选，便于折叠定位）
-    _center_marks(msp, x0 + ox, y0 + oy, x1 + ox, y1 + oy, scale)
+                       dxfattribs={"layer": "图框",
+                                   "lineweight": mm_to_lineweight(FRAME_LINEWEIGHT_MM)})
+    # 对中标志（四边中点小三角；表 4.0.4 的 0.5b/0.7b）
+    _center_marks(msp, x0 + ox, y0 + oy, x1 + ox, y1 + oy, scale,
+                  lineweight=mark_lw)
     # 标题栏（右下角，向左上展开）；随图幅缩放系数 tb 等比放大
-    _draw_title_block(msp, x1 + ox, y0 + oy, scale, info, tracker, tb)
+    _draw_title_block(msp, x1 + ox, y0 + oy, scale, info, tracker, tb, sheet=s)
     # 注册图框边距区域（仅四周留白，不占绘图区，避免假碰撞）
     if tracker is not None:
         # 左装订边、右/上/下留白边
@@ -586,25 +599,32 @@ def save_dxf_autofit(doc, path, scale, info, tracker=None, orientation=None):
     return save_dxf(doc, path)
 
 
-def _center_marks(msp, x0, y0, x1, y1, s):
+def _center_marks(msp, x0, y0, x1, y1, s, lineweight=None):
+    """四边中点的对中标志（折叠定位用）。线宽按表 4.0.4 由调用方给定。"""
     mid_w = (x0 + x1) / 2
     mid_h = (y0 + y1) / 2
     L = 5 * s
+    attrs = {"layer": "图框"}
+    if lineweight is not None:
+        attrs["lineweight"] = lineweight
     for (cx, cy, dx, dy) in [
         (mid_w, y1, L, L),   # 上
         (mid_w, y0, L, -L),  # 下
         (x0, mid_h, -L, L),  # 左
         (x1, mid_h, L, L),   # 右
     ]:
-        msp.add_line((cx - dx / 2, cy), (cx + dx / 2, cy), dxfattribs={"layer": "图框"})
-        msp.add_line((cx, cy - dy / 2), (cx, cy + dy / 2), dxfattribs={"layer": "图框"})
+        msp.add_line((cx - dx / 2, cy), (cx + dx / 2, cy), dxfattribs=attrs)
+        msp.add_line((cx, cy - dy / 2), (cx, cy + dy / 2), dxfattribs=attrs)
 
 
-def _draw_title_block(msp, rx, by, s, info: FrameInfo, tracker=None, tb: float = 1.0):
+def _draw_title_block(msp, rx, by, s, info: FrameInfo, tracker=None,
+                      tb: float = 1.0, sheet: str = "A3"):
     """标题栏右下角位于 (rx, by)，向左上展开 180×56（×scale×tb）。
 
     v1.5: tb 为图幅缩放系数（大图标题栏放大，小图不变），所有内部几何
     与字高均按 ts = s * tb 等比缩放，保持图框比例正确。
+    v1.6: 按 GB/T 50001—2017 表 4.0.4 给**外框线**与**分格线**分别设线宽
+    （A2/A3/A4 为 0.7b / 0.35b；A0/A1 为 0.5b / 0.25b）。
     """
     ts = s * tb
     tw, th = TITLE_W * ts, TITLE_H * ts
@@ -612,27 +632,33 @@ def _draw_title_block(msp, rx, by, s, info: FrameInfo, tracker=None, tb: float =
     # 标题栏整体（框线 + 分格 + 文字）独占"标题栏"层：
     # 出图前要按内容重选幅面重画图框，整层删除才能保证不留残影。
     LB = "标题栏"
-    # 外框（粗实线）
+    big = sheet in ("A0", "A1")
+    outer_lw = mm_to_lineweight(BIG_MARK_LINEWEIGHT_MM if big
+                                else TITLE_OUTER_LINEWEIGHT_MM)
+    grid_lw = mm_to_lineweight(BIG_TRIM_LINEWEIGHT_MM if big
+                               else TRIM_LINEWEIGHT_MM)
+    # 外框（表 4.0.4：标题栏外框线 = 0.7b / A0、A1 取 0.5b）
     msp.add_lwpolyline([(lx, by), (rx, by), (rx, ty), (lx, ty)], close=True,
-                       dxfattribs={"layer": LB})
+                       dxfattribs={"layer": LB, "lineweight": outer_lw})
     # 注册标题栏区域
     if tracker is not None:
         tracker.register(lx, by, rx, ty, margin=50)
-    # —— 分格 ——
+    # —— 分格（表 4.0.4：标题栏分格线 = 0.35b / A0、A1 取 0.25b）——
+    gattrs = {"layer": LB, "lineweight": grid_lw}
     # 主分界：图名区(左96) | 签字区(36) | 单位区(28) | 比例图号区(20)
     c1 = lx + 96 * ts      # 图名 | 签字
     c2 = lx + 132 * ts     # 签字 | 单位
     c3 = lx + 160 * ts     # 单位 | 比例图号
     hmid = by + 28 * ts    # 上下分界
     for x in (c1, c2, c3):
-        msp.add_line((x, by), (x, ty), dxfattribs={"layer": LB})
-    msp.add_line((lx, hmid), (c1, hmid), dxfattribs={"layer": LB})
+        msp.add_line((x, by), (x, ty), dxfattribs=gattrs)
+    msp.add_line((lx, hmid), (c1, hmid), dxfattribs=gattrs)
     # 比例/图号 上下分界
-    msp.add_line((c3, by + 14 * ts), (rx, by + 14 * ts), dxfattribs={"layer": LB})
+    msp.add_line((c3, by + 14 * ts), (rx, by + 14 * ts), dxfattribs=gattrs)
     # 签字区三行（上半格 28~56 内均分，与签字文字行对应）
     for i in (1, 2):
         y = by + (28 + 28 / 3 * i) * ts
-        msp.add_line((c1, y), (c2, y), dxfattribs={"layer": LB})
+        msp.add_line((c1, y), (c2, y), dxfattribs=gattrs)
 
     # —— 文字 ——
     H = ts  # 字高基数（随图幅缩放）

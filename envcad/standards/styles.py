@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import math as _math
+
 import ezdxf
 from ezdxf.enums import TextEntityAlignment
 
@@ -30,6 +32,57 @@ HZ_FONT = _resolve_font(
     "C:/Windows/Fonts/simfang.ttf",
 )
 ENG_FONT = "simplex.shx"  # 标准 AutoCAD 字形
+
+# ─── 尺寸起止符号（GB/T 50001—2017 §11.1.4）───────────────
+#
+# 11.1.4 原文分两句，对应两类尺寸、两种起止符号，**不能混用**：
+#   · "尺寸起止符号用中粗斜短线绘制，其倾斜方向应与尺寸界线成顺时针 45° 角，
+#      长度宜为 2mm～3mm。"                        → 线性/对齐尺寸用斜短线
+#   · "半径、直径、角度与弧长的尺寸起止符号，宜用箭头表示，箭头宽度 b
+#      不宜小于 1mm。"                             → 径向/角度/弧长用箭头
+#   条文说明："一般情况下均用斜短线，圆弧的直径、半径等用箭头。"
+#
+# 两类都必须靠**标注样式**配置：ezdxf 的 ``add_diameter_dim(override=...)``
+# 会静默丢弃 override（`dim.override()` 里看不到传进去的值），渲染只认样式。
+# 故本模块导出两个样式工厂：线性 ``GB-DIM-{s}`` 与径向 ``GB-DIM-ARROW-{s}``。
+#
+# ★ "dimasz 不等于画出来的长度"：dimasz 只是箭头块的**插入比例**，
+#   画出长度 = dimasz × 块内长度。斜短线块长 √2，箭头块长 1.0，故两者
+#   反算公式不同。早期版本一律写 ``dimasz = 2.5*scale``，导致斜短线实际画出
+#   3.54mm（超 §11.1.4 的 3mm 上限）、箭头宽度只有 0.82mm（低于 b≥1mm 下限）。
+
+#: 斜短线在**纸面**上的目标长度，取规范 2~3mm 的中值。
+TICK_LEN_MM = 2.5
+#: AutoCAD ``_ARCHTICK`` 块是 (-0.5,-0.5)→(0.5,0.5) 的一条线段，块内长 √2。
+ARCHTICK_UNIT_LEN = _math.sqrt(2.0)
+#: §11.1.4 对箭头只规定了宽度 b，取规范下限 1mm 作为目标。
+ARROW_WIDTH_MM = 1.0
+#: ezdxf ``_CLOSEDFILLED`` 块（实心闭合箭头）的 宽/长 比：块内几何是
+#: SOLID(-1, 0.164399) (0,0) (-1,-0.164399)，长 1.0、宽 0.32879797。
+#: 有护栏测试 :func:`test_closedfilled_ratio_matches_ezdxf` 盯着这个值。
+CLOSEDFILLED_WIDTH_PER_LEN = 0.32879797
+
+#: 由"宽度下限"反算箭头长度：b = CLOSEDFILLED_WIDTH_PER_LEN × 长度
+#: → 长度 = 1mm / 0.3288 ≈ 3.041mm。即箭头长 ≈3.04mm、宽 =1.00mm。
+ARROW_LEN_MM = ARROW_WIDTH_MM / CLOSEDFILLED_WIDTH_PER_LEN
+
+#: 两个起止符块名（``dimblk`` 取值）
+TICK_BLOCK = "_ARCHTICK"
+ARROW_BLOCK = "_CLOSEDFILLED"
+
+
+def archtick_dimasz(scale: float) -> float:
+    """纸面斜短线长 ``TICK_LEN_MM`` → 线性尺寸的 ``dimasz``（模型单位）。"""
+    return TICK_LEN_MM / ARCHTICK_UNIT_LEN * scale
+
+
+def arrow_dimasz(scale: float) -> float:
+    """纸面箭头长 ``ARROW_LEN_MM`` → 径向尺寸的 ``dimasz``（模型单位）。
+
+    箭头块长 1.0，故画出长度就等于 dimasz，无需再除块长。
+    """
+    return ARROW_LEN_MM * scale
+
 
 # ─── 字号档位 (图纸 mm) ──────────────────────────────────
 FONT_SIZES = {
@@ -72,25 +125,57 @@ def setup_text_styles(doc: ezdxf.drawing.Drawing) -> None:
         print(f'[警告] 操作失败：{_e}')
 
 
-def setup_dimstyles(doc: ezdxf.drawing.Drawing, scale: float = 1.0) -> str:
-    """创建国标标注样式，返回样式名。
+def ensure_archtick_block(doc: ezdxf.drawing.Drawing) -> str:
+    """确保文档里有 ``_ARCHTICK`` 块（§11.1.4 的 45° 中粗斜短线）。
 
-    scale: 出图比例的倒数。1:100 图纸 scale=100。
+    ``dimblk`` 指向的块**必须存在**：裸 ``ezdxf.new()`` 不带标准箭头块，写
+    DXF / 渲染时 ezdxf 会直接抛 ``DXFValueError: Block "_ARCHTICK" does not
+    exist``（只在 ``setup=True`` 时才自带）。所以设样式前先补齐。
+
+    块的几何与 ezdxf ``setup=True`` 的一致：一条 (-0.5,-0.5)→(0.5,0.5) 的线段，
+    故块内长度为 √2，配 :data:`ARCHTICK_UNIT_LEN` 使用。
     """
-    name = f"GB-DIM-{int(scale)}"
+    if TICK_BLOCK not in doc.blocks:
+        blk = doc.blocks.new(TICK_BLOCK)
+        blk.add_lwpolyline([(-0.5, -0.5), (0.5, 0.5)])
+    return TICK_BLOCK
+
+
+def ensure_arrow_block(doc: ezdxf.drawing.Drawing) -> str:
+    """确保文档里有 ``_CLOSEDFILLED`` 块（§11.1.4b 的实心闭合箭头）。
+
+    几何与 ezdxf ``setup=True`` 自带的一致：SOLID
+    ``(-1, 0.164399) (0, 0) (-1, -0.164399)``，块内长 1.0、宽 0.32879797。
+    用 ezdxf 自己的 :data:`ezdxf.render.arrows.ARROWS` 生成，避免手抄坐标漂移。
+    """
+    if ARROW_BLOCK in doc.blocks:
+        return ARROW_BLOCK
+    try:
+        from ezdxf.render.arrows import ARROWS
+        ARROWS.create_block(doc.blocks, "")      # "" → _CLOSEDFILLED
+    except Exception as _e:                      # pragma: no cover - 兜底
+        blk = doc.blocks.new(ARROW_BLOCK)
+        w = CLOSEDFILLED_WIDTH_PER_LEN / 2.0
+        blk.add_solid([(-1.0, w), (0.0, 0.0), (-1.0, -w)])
+        print(f'[警告] ARROWS 不可用，手写箭头块：{_e}')
+    return ARROW_BLOCK
+
+
+def _make_dimstyle(doc: ezdxf.drawing.Drawing, name: str, scale: float,
+                   block: str, dimasz: float) -> str:
+    """按给定起止符块与 dimasz 建立（或复用）一个标注样式。"""
     if name in doc.dimstyles:
         return name
     try:
         dim = doc.dimstyles.add(name)
-    except Exception as _e:
+    except Exception as _e:                      # pragma: no cover - 兜底
+        print(f'[警告] 操作失败：{_e}')
         return "Standard"
 
-    txt_h = 3.5 * scale
-    arrow = 2.5 * scale
-
-    # 基本标注
-    dim.dxf.dimtxt = txt_h
-    dim.dxf.dimasz = arrow
+    dim.dxf.dimtxt = 3.5 * scale
+    dim.dxf.dimasz = dimasz
+    # §11.1.4：这是"起止符块"，线性=_ARCHTICK 斜短线 / 径向=_CLOSEDFILLED 箭头
+    dim.dxf.dimblk = block
     dim.dxf.dimexe = 2.0 * scale
     dim.dxf.dimexo = 1.2 * scale        # 增大偏移防遮挡
     dim.dxf.dimgap = 1.5 * scale        # 增大文字与尺寸线间距
@@ -118,9 +203,31 @@ def setup_dimstyles(doc: ezdxf.drawing.Drawing, scale: float = 1.0) -> str:
     dim.dxf.dimdec = 2                  # 小数位
     dim.dxf.dimrnd = 0.01               # 圆整
     dim.dxf.dimtdec = 2                  # 公差小数位
-    # dim.dxf.dimaltd = 2  # 备用单位精度 - ezdxf DIMSTYLE 可能不支持
 
     return name
+
+
+def setup_dimstyles(doc: ezdxf.drawing.Drawing, scale: float = 1.0) -> str:
+    """创建**线性**尺寸标注样式 ``GB-DIM-{scale}``（§11.1.4 斜短线起止符）。
+
+    scale: 出图比例的倒数。1:100 图纸 scale=100。
+    """
+    ensure_archtick_block(doc)
+    return _make_dimstyle(doc, f"GB-DIM-{int(scale)}", scale,
+                          TICK_BLOCK, archtick_dimasz(scale))
+
+
+def setup_arrow_dimstyle(doc: ezdxf.drawing.Drawing, scale: float = 1.0) -> str:
+    """创建**径向/角度**尺寸标注样式 ``GB-DIM-ARROW-{scale}``。
+
+    §11.1.4 后半句：半径、直径、角度与弧长的起止符号宜用箭头，宽度 b ≥ 1mm。
+    与线性样式分开是因为 ``dimblk``/``dimasz`` 只能由样式携带（override 会被
+    ezdxf 静默丢弃），一个样式没法同时给出斜短线与箭头两种起止符。
+    """
+    ensure_arrow_block(doc)
+    return _make_dimstyle(doc, f"GB-DIM-ARROW-{int(scale)}", scale,
+                          ARROW_BLOCK, arrow_dimasz(scale))
+
 
 
 def set_text(msp, text, layer, height, align="left"):

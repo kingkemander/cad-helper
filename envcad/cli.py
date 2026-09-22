@@ -679,12 +679,35 @@ def main(argv=None):
     check_p.add_argument("--verbose", "-v", action="store_true", help="逐条列出问题")
     check_p.add_argument("--json", action="store_true", help="输出 JSON")
 
+    # 国标审图（生产可用性；与 check 的"能不能交出去"互补）
+    audit_p = sub.add_parser(
+        "audit", help="国标审图：按 GB/T 50001-2017 逐条判线宽/字高/图框/尺寸起止符/图层")
+    audit_p.add_argument("path", nargs="?", help="目录或单个 dxf")
+    audit_p.add_argument("--json", action="store_true", help="输出 JSON")
+    audit_p.add_argument("--verbose", "-v", action="store_true", help="列出违规样本")
+    audit_p.add_argument("--only", choices=["error", "warning"], default=None,
+                         help="只显示某一严重度")
+    audit_p.add_argument("--rules", action="store_true", help="列出全部已实现规则")
+
     # 出图预览（让用户看得见）
     prev_p = sub.add_parser("preview", help="DXF 渲染成 PNG 预览（可拼总览图）")
     prev_p.add_argument("path", help="目录或单个 dxf")
     prev_p.add_argument("--out", default=None, help="PNG 输出目录")
     prev_p.add_argument("--dpi", type=int, default=150)
     prev_p.add_argument("--contact", action="store_true", help="另出一张拼图总览")
+
+    # DWG 导出（转换器可插拔：不绑定特定 CAD）
+    dwg_p = sub.add_parser(
+        "dwg", help="DXF 转 DWG：自动挑本机转换器（ODA / LibreDWG / 本机 CAD）")
+    dwg_p.add_argument("path", nargs="?", help="目录或单个 dxf")
+    dwg_p.add_argument("--out", default=None, help="DWG 输出目录（默认与源同目录）")
+    dwg_p.add_argument("--as", dest="dwg_version", default=None,
+                       help="DWG 版本，如 2018 / r2004（默认用该后端默认值）")
+    dwg_p.add_argument("--backend", default="auto",
+                       choices=["auto", "oda", "libredwg", "com"],
+                       help="指定转换器；auto=按保真度自动挑（默认）")
+    dwg_p.add_argument("--backends", dest="list_backends", action="store_true",
+                       help="列出本机可用的转换器及其支持的版本")
 
     # 脱硫塔输入条件
     equip_p.add_argument("--so2", type=float, default=2000.0, help="[脱硫]入口SO2 mg/m³")
@@ -708,6 +731,15 @@ def main(argv=None):
                           + (["--verbose"] if args.verbose else [])
                           + (["--json"] if args.json else []))
 
+    if args.command == "audit":
+        from .gb_audit import main as gb_main
+        return gb_main(
+            ([args.path] if args.path else [])
+            + (["--json"] if args.json else [])
+            + (["--verbose"] if args.verbose else [])
+            + (["--only", args.only] if args.only else [])
+            + (["--rules"] if args.rules else []))
+
     if args.command == "preview":
         from .preview import render_dir, render_dxf, check_cjk_font
         if not check_cjk_font():
@@ -726,6 +758,63 @@ def main(argv=None):
         for p in pngs:
             print(f"  {p}")
         return 0
+
+    if args.command == "dwg":
+        from .engine import dwg_export as DX
+
+        if args.list_backends:
+            print("DXF→DWG 转换器（按保真度排序）：")
+            for n in DX._PRIORITY:
+                meta = DX.BACKENDS[n]
+                mark = "✓ 可用  " if DX.backend_available(n) else "× 未安装"
+                print(f"  {mark} {n:9s} {meta['label']}")
+                print(f"             支持版本: {', '.join(meta['versions'])}"
+                      f"   默认: {meta['default']}")
+                if not DX.backend_available(n):
+                    print(f"             安装: {meta['install']}")
+            picked = DX.detect_backend()
+            print(f"\n当前会自动使用：{picked or '（无，见上方安装指引）'}")
+            return 0
+
+        if not args.path:
+            print("用法：envcad dwg <目录或dxf> [--out DIR] [--as 2018] "
+                  "[--backend oda|libredwg|com]")
+            print("查看可用转换器：envcad dwg --backends")
+            return 2
+
+        if not DX.available_backends():
+            print(DX.backend_help())
+            return 2
+
+        backend = args.backend
+        if backend == "auto":
+            backend = DX.detect_backend()
+        label = DX.BACKENDS[backend]["label"]
+        print(f"转换器：{label}")
+
+        if os.path.isdir(args.path):
+            n, results = DX.export_dir(args.path, args.out,
+                                       backend=backend, version=args.dwg_version)
+            for name, ok, msg in results:
+                if not ok:
+                    print(f"  ✗ {name}\n      {msg}")
+            print(f"\n完成 {n}/{len(results)} 张 → {args.out or args.path}")
+            if n < len(results):
+                print("[注意] 有转换失败的图，交付前请逐张确认或用别的转换器重试。")
+            return 0 if n == len(results) else 1
+
+        out = args.out
+        if out and not out.lower().endswith(".dwg"):
+            out = os.path.join(out, os.path.splitext(
+                os.path.basename(args.path))[0] + ".dwg")
+        ok, msg = DX.export_dwg(args.path, out, backend=backend,
+                                version=args.dwg_version)
+        print(("  ✓ " + msg) if ok else ("  ✗ " + msg))
+        if ok and not DX.BACKENDS[backend]["keeps_dimension"]:
+            print("  [说明] 该转换器保不住 DIMENSION 智能标注，"
+                  "到 CAD 里尺寸会变成普通线和文字（不能联动改）。"
+                  "需要可编辑标注请用 ODA 或 Windows 上的原生 CAD。")
+        return 0 if ok else 1
 
     if args.command == "test":
         paths = _run(args.test, args.out, args.scale, args.cad)

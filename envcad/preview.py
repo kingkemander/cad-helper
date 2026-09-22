@@ -27,6 +27,7 @@ envcad 的交付物是 DXF。但 DXF 在对话窗口、聊天工具、邮件里*
 * 画幅取**图框**长宽比并按图框裁切，否则 matplotlib 会把整张纸留大片白边。
 * 中文字体：TEXT 走 DXF 里的 HZ 样式，渲染端由 matplotlib 提供字形。
   缺 CJK 字体时汉字会变成方框，故 :func:`check_cjk_font` 会提前告警。
+* **线宽必须显式换算成 pt**（见 :data:`MM_TO_POINTS`），否则预览看不出线宽差别。
 """
 from __future__ import annotations
 
@@ -38,11 +39,30 @@ __all__ = [
     "render_dxf", "render_dir", "contact_sheet", "check_cjk_font",
     "apply_cjk_font",
     "frame_extent", "PreviewError",
+    "MM_TO_POINTS", "MIN_LINEWEIGHT_PT",
 ]
 
 
 class PreviewError(RuntimeError):
     """预览失败（缺依赖 / 文件读不了 / 无内容）。"""
+
+
+# ── 线宽 ──────────────────────────────────────────────────────────
+#: mm → pt。**必须显式换算**：
+#: ezdxf 的 :class:`MatplotlibBackend` 把 ``BackendProperties.lineweight``（单位
+#: mm）直接当 pt 交给 matplotlib（``get_lineweight`` 只做
+#: ``max(lineweight * scaling, min_lineweight)``），而默认 ``min_lineweight`` 是
+#: ``72 / figure.dpi``。本模块的 figure 建在 matplotlib 默认 100dpi 上，于是默认
+#: 下限 = 0.72 —— 凡是 ≤0.72mm 的线（也就是全部图线）都被夹到同一个 0.72pt，
+#: 预览里**完全看不出 0.13/0.18/0.25/0.35/0.5mm 的区别**，表 4.0.4 的合规性
+#: 在交付的 PNG 上无从体现（实测：图框线 0.18mm 与 0.5mm 渲染出的 PNG 字节
+#: 完全相同）。乘上这个系数后，渲染出的线宽就等于图纸上的真实线宽
+#: （1mm → 2.8346pt → 在 150dpi 下 ≈ 5.9px/mm，与纸面比例一致）。
+MM_TO_POINTS = 72.0 / 25.4
+
+#: 线宽下限（pt）。低于 ~0.5pt 的线在 150dpi 下不足 1px 会若隐若现；0.5pt 保证
+#: 最细的 0.13mm 也画得出来，同时不与 0.18mm（0.51pt）混成一根。
+MIN_LINEWEIGHT_PT = 0.5
 
 
 # ── 依赖 ──────────────────────────────────────────────────────────
@@ -158,10 +178,16 @@ def render_dxf(path: str, out_png: Optional[str] = None, *,
     fig = plt.figure(figsize=(width_in, max(1.0, width_in * h / w)))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_axis_off()
+    # lineweight_scaling 把 DXF 的 mm 线宽换算成 pt（后端不会自己做）；
+    # min_lineweight 给最细的线一个 ~1px 的地板，避免细线在 PNG 上消失。
+    cfg = Configuration(
+        color_policy=ColorPolicy.BLACK,
+        lineweight_scaling=MM_TO_POINTS,
+        min_lineweight=MIN_LINEWEIGHT_PT,
+    )
     try:
         Frontend(RenderContext(doc), MatplotlibBackend(ax),
-                 config=Configuration(color_policy=ColorPolicy.BLACK)
-                 ).draw_layout(msp, finalize=True)
+                 config=cfg).draw_layout(msp, finalize=True)
     except Exception as e:
         plt.close(fig)
         raise PreviewError(f"渲染失败 {os.path.basename(path)}：{e}") from e
