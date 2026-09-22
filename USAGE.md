@@ -112,6 +112,27 @@ python -m envcad.cli preview D:\测试输出 --out D:\测试输出\preview --dpi
 预览按图框裁切、自动取景，图纸本体不裁边。需要 `matplotlib`（可选依赖）；
 未安装时只有 `preview` 不可用，出图与 `check` 不受影响。
 
+### 8. 交付收尾（体检 + 预览 + 交付清单，一条命令）
+
+**只回 DXF 路径等于没交付**——用户手里没有 CAD 就看不了 DXF。`--preview` 把
+"文件生成成功"接到"图纸能交付"：出图后自动跑体检、落全套 PNG + 总览图，最后
+打印一份可直接发给用户的交付清单。
+
+```bash
+python -m envcad.cli test all --out D:\测试输出 --preview
+```
+
+Python 里等价于：
+
+```python
+from envcad.audit import deliver
+print(deliver(r"D:\测试输出", dxfs))      # dxfs 可传单个路径、路径列表或省略
+```
+
+清单包含：图纸目录 / DXF 张数 / 单张预览路径 / 总览图路径 / 交付提示。
+体检或预览失败只降级成 `[提示]` 写进清单，**不会 raise**——已生成的图纸不能
+因为体检或预览出问题就被吞掉。最终是否交付仍由人工审核拍板。
+
 ---
 
 ## 三、批量出图 JSON 配置格式

@@ -84,12 +84,21 @@ envcad check D:\drawings --verbose
 
 # 出图预览：DXF → PNG（用户打不开 DXF，交付要带图）
 envcad preview D:\drawings --out D:\drawings\preview --contact
+
+# 交付收尾：出图 → 体检 → 落预览 PNG + 总览图 → 打印交付清单（一条命令）
+envcad test all --out D:\drawings --preview
 ```
 
 > **交付前必跑 `check`**：`verify.py` 只查"必需标注在不在"，查不出会让客户
 > 直接退单的硬伤（幅面虚涨、标题栏写 1:100 实测 1:137、内容压标题栏、文字
 > 叠印、说明框条目错行）。`envcad check` 把这些变成一条命令，返回码 0 才可交付。
 > `preview` 需要可选依赖 `matplotlib`；出图与 `check` 不需要它。
+
+> **只回 DXF 路径等于没交付**——用户手里没有 CAD 就看不了 DXF。用
+> `--preview`（或 Python 里 `audit.deliver(out_dir, dxfs)`）把"文件生成成功"
+> 接到"图纸能交付"：跑完体检再落全套 PNG 与总览图，最后打印可直接发给用户的
+> 交付清单（目录 / 张数 / 单张预览 / 总览图）。体检或预览失败只会降级成
+> `[提示]`，不会把已生成的图纸吞掉。
 
 Python API：
 

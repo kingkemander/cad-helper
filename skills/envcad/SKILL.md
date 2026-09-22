@@ -431,6 +431,11 @@ draw_control_valve(msp, (vx, vy), "globe", actuator="pneumatic",
 6. If requested, push to CAD with `--cad autocad`
 7. Present results: 文件路径**以及预览图**（用户打不开 DXF，只列路径等于没交付）
 
+`envcad test <t> --out <dir> --preview` 把 3→5 合成一步：出图后自动跑体检、
+落全套 PNG + 总览图，并打印可直接发给用户的交付清单（Python 里等价于
+`envcad.audit.deliver(out_dir, dxfs)`）。体检或预览失败只降级为 `[提示]`，
+不会把已生成的图纸吞掉。
+
 ## Important: Always Verify
 
 After ANY drawing generation, run `verify.py`. Never skip this step.
