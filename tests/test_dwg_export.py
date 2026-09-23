@@ -52,7 +52,12 @@ def test_detect_backend_is_first_available():
 
 
 def test_keeps_dimension_flag_only_for_real_cad_backends():
-    """只有真正原生 CAD 才保得住 DIMENSION 智能对象；LibreDWG 保不住。"""
+    """只有真正原生 CAD 才保得住**可联动**的 DIMENSION。
+
+    注意措辞：LibreDWG 并非"删掉标注"——实测 0.14 会保留 DIMENSION 实体与显示块，
+    但约 46%（68 张 / 24 个标注里 11 个）丢失驱动点，get_measurement() 归零或漂移。
+    所以它保的是"看起来对的图"，不是"可编辑的智能标注"，keeps_dimension 应为 False。
+    """
     assert D.BACKENDS["oda"]["keeps_dimension"] is True
     assert D.BACKENDS["com"]["keeps_dimension"] is True
     assert D.BACKENDS["libredwg"]["keeps_dimension"] is False
