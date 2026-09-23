@@ -120,12 +120,12 @@ def preflight(install_dir: Path) -> Path:
     usage = shutil.disk_usage(probe)
     free_gb = usage.free / (1024 ** 3)
     say(f"    磁盘余量：{free_gb:.1f} GB（{probe}）")
-    # 实测：完整安装 app 228M + .venv 2.5G ≈ 2.7G（macOS arm64 / Python 3.14 /
-    # 含 [doc]：numpy+fontTools+ezdxf+openpyxl+lxml+docx）。文档里旧的 113MB
-    # 是早期精简依赖的数字，已不适用。中途磁盘写满会留下半截 venv，比提前拦下更糟，
-    # 所以门槛按最坏情况（exFAT 簇开销偏大）取 3GB。
-    if free_gb < 3:
-        raise Fail(f"磁盘余量不足 3 GB（当前 {free_gb:.1f} GB），请先清理后再装。")
+    # 实测（macOS arm64 / Python 3.14 / [doc]，APFS）：app 6.1M + .venv 108M ≈ 114M。
+    # 取 1GB 门槛 = 实际占用的约 10 倍，留给 pip 下载与构建 wheel 的临时峰值空间。
+    # 注意：exFAT 上 du 会报 ~2.7G，那是 128KB 簇把大量小文件放大 20 倍的假象，
+    # 不是真实数据量——不要拿它当依据抬高门槛（本仓库曾据此误改过一次）。
+    if free_gb < 1:
+        raise Fail(f"磁盘余量不足 1 GB（当前 {free_gb:.1f} GB，实测需要约 114 MB），请先清理后再装。")
 
     return python
 

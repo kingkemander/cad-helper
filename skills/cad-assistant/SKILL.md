@@ -68,6 +68,9 @@ python3 ".../bootstrap-v1.5.14.py" --workspace "<WORKSPACE>" --proxy http://127.
 > macOS 会在 `.git` 里生成 `._*` 伴生文件，git 每次操作都刷
 > `error: non-monotonic index .git/objects/pack/._pack-*.idx`。实测 `git pull` 仍能成功
 > （只是噪声），但自动更新的可靠性会下降。**用默认的 `~/凹凸CAD助手1.5`（APFS/HFS+）即可，不要改。**
+>
+> 另注：exFAT 上 `du` 会把同一套安装报成约 **2.7 GB**——那是 128 KB 簇把 numpy 等
+> 数千个小文件放大 20 倍的假象，真实数据量仍是约 114 MB。**不要拿外置盘的 `du` 数字判断磁盘需求。**
 
 ### 装完怎么用
 
@@ -157,8 +160,8 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 |---|---|
 | **安装源** | `https://github.com/kingkemander/cad-helper`（默认分支 `main`） |
 | **引导器（已校验）** | Release `v1.5.14`，SHA-256 `e1a371f9…6aad9` |
-| 克隆体积 | `app` ≈ 228 MB（含 `.git` 23 MB） |
-| **磁盘占用** | **实测约 2.7 GB**（`app` 228M + `.venv` 2.5G；numpy/fontTools/ezdxf/openpyxl/lxml/docx）。引导器要求 **≥ 3 GB** 空闲 |
+| 克隆体积 | `app` ≈ 6 MB（APFS；含 `.git`，保留完整提交历史） |
+| **磁盘占用** | **实测约 114 MB**（`app` 6.1M + `.venv` 108M）。引导器要求 **≥ 1 GB** 空闲，余量留给 pip 下载与构建 wheel 的临时峰值 |
 | 上游原作者 | `https://github.com/akaDJL/-cad-`（MIT，仅作溯源） |
 | Python 要求 | **≥ 3.10**（3.9 会直接报 `requires a different Python`） |
 | 核心依赖 | `ezdxf>=1.3` |
