@@ -64,6 +64,11 @@ python3 ".../bootstrap-v1.5.14.py" --workspace "<WORKSPACE>" --proxy http://127.
 > 必然报 `No matching distribution found for pywin32`（已实测复现）。
 > 需要 STEP 3D 就 `pip install -e ".[doc,step]"`。
 
+> ⚠️ **不要把 `--install-dir` 指到 exFAT / NTFS 外置盘**（已实测）：这类文件系统不支持 POSIX 语义，
+> macOS 会在 `.git` 里生成 `._*` 伴生文件，git 每次操作都刷
+> `error: non-monotonic index .git/objects/pack/._pack-*.idx`。实测 `git pull` 仍能成功
+> （只是噪声），但自动更新的可靠性会下降。**用默认的 `~/凹凸CAD助手1.5`（APFS/HFS+）即可，不要改。**
+
 ### 装完怎么用
 
 **新建一个会话**，在「智能体」下拉列表里选择 **AutoCAD 助手**，然后直接说需求即可，例如：
@@ -161,6 +166,7 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 **禁止项**
 
 - ❌ 没确认就装依赖、改 PATH、注册定时任务、改系统 Python。
+- ❌ 把 `--install-dir` 指到 exFAT / NTFS 外置盘（会让 git 持续报 `non-monotonic index`）。
 - ❌ macOS/Linux 上用 `--extras all`；用 `unzip` 解压（会写坏中文文件名，必须 `ditto -x -k`）。
 - ❌ 用 Python 3.9 或更低建 venv；用 `sudo` 装。
 - ❌ 用 zip 降级安装却宣称自动更新可用。
