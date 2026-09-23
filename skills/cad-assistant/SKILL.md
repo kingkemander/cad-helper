@@ -19,17 +19,22 @@ description: "一键安装并在工作区注册「AutoCAD 助手」智能体，�
 
 ## 安装
 
-把 `<WORKSPACE>` 替换成当前工作区的绝对路径，然后执行：
+把 `<WORKSPACE>` 替换成当前工作区的绝对路径，`python3` 替换成**本机可用的 Python 3.10+ 解释器命令**
+（macOS / Linux 通常是 `python3`；Windows 通常是 `py -3`，没有的话用 `python`）。然后执行：
 
 ```bash
 python3 -c "import hashlib,pathlib,urllib.request;u='https://github.com/kingkemander/cad-helper/releases/download/v1.5.14/bootstrap_cad_assistant.py';p=pathlib.Path('<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py');p.parent.mkdir(parents=True,exist_ok=True);d=urllib.request.urlopen(u,timeout=180).read();assert hashlib.sha256(d).hexdigest()=='4a1e56ab35e9cac707b5a6f8d67bc9acd0ad00b4dd3b6b6c8a709a2141dc9c9a','引导器校验失败，请勿运行';p.write_bytes(d)" && python3 "<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py" --workspace "<WORKSPACE>"
 ```
 
+> **先确认 Python 版本**：跑 `python3 --version`（Windows：`py -3 --version`）必须 ≥ 3.10。
+> 低于 3.10（例如 macOS 自带的 3.9）会直接失败。macOS 可用 `brew install python@3.12` 补一个；
+> **不要用 `sudo` 装，也不要动系统自带的 Python。**
+
 **这一步会真实改动用户电脑**，动手前必须取得一次明确确认，并用一段话说清将要做什么：
 
-> 我会把 envcad（凹凸 CAD 助手）装到你的电脑上：从 GitHub 获取源码（约 5 MB，用 `git clone` 保留提交历史，
+> 我会把 envcad（凹凸 CAD 助手）装到你的电脑上：从 GitHub 获取源码（约 6 MB，用 `git clone` 保留提交历史，
 > 便于以后一条命令升级），在 `~/凹凸CAD助手1.5` 建一个独立运行环境（不动你系统里的 Python），
-> 安装 ezdxf 等依赖（约 100–200 MB），实测出一张图纸验证，最后把「AutoCAD 助手」写进当前工作区的智能体列表。
+> 安装 ezdxf 等依赖（实测约 110 MB），实测出一张图纸验证，最后把「AutoCAD 助手」写进当前工作区的智能体列表。
 > 是否继续？
 
 想先看计划不动手，加 `--dry-run`：
@@ -151,6 +156,11 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 # 若开过自动更新，先卸载定时任务：
 # "<安装目录>/.venv/bin/python" "<安装目录>/app/tools/setup_autoupdate.py" uninstall
 ```
+
+> Windows 上把上面三条换成 PowerShell：`Remove-Item -Recurse -Force "$HOME\凹凸CAD助手1.5"`、
+> `Remove-Item -Force "<WORKSPACE>\.opencode\agents\AutoCAD助手.md"`、
+> `Remove-Item -Recurse -Force "<WORKSPACE>\.spaceagents\plugins\cad-assistant"`。
+> 卸载前一并跑一次 `setup_autoupdate.py uninstall`（Windows 用 `.venv\Scripts\python.exe`）。
 
 ---
 
