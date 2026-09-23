@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import re
 import shutil
@@ -119,8 +120,12 @@ def preflight(install_dir: Path) -> Path:
     usage = shutil.disk_usage(probe)
     free_gb = usage.free / (1024 ** 3)
     say(f"    磁盘余量：{free_gb:.1f} GB（{probe}）")
-    if free_gb < 2:
-        raise Fail(f"磁盘余量不足 2 GB（当前 {free_gb:.1f} GB），请先清理后再装。")
+    # 实测：完整安装 app 228M + .venv 2.5G ≈ 2.7G（macOS arm64 / Python 3.14 /
+    # 含 [doc]：numpy+fontTools+ezdxf+openpyxl+lxml+docx）。文档里旧的 113MB
+    # 是早期精简依赖的数字，已不适用。中途磁盘写满会留下半截 venv，比提前拦下更糟，
+    # 所以门槛按最坏情况（exFAT 簇开销偏大）取 3GB。
+    if free_gb < 3:
+        raise Fail(f"磁盘余量不足 3 GB（当前 {free_gb:.1f} GB），请先清理后再装。")
 
     return python
 
@@ -350,7 +355,16 @@ def write_launcher(install_dir: Path, venv_dir: Path) -> Path | None:
     shim = bin_dir / "envcad"
     shim.write_text(f'#!/bin/sh\nexec "{app_executable(venv_dir, "envcad")}" "$@"\n', encoding="utf-8")
     shim.chmod(0o755)
-    return shim
+
+    # 只创建文件，绝不擅自改 PATH；但要说清用户在终端里能不能直接用。
+    if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
+        say(f"    ⚠ {bin_dir} 不在 PATH 里，终端直接敲 envcad 会找不到")
+        say(f"      要用的话自行在 shell 配置里加：export PATH=\"{bin_dir}:$PATH\"")
+        say(f"      或直接用完整路径：{app_executable(venv_dir, 'envcad')}")
+        shim_usable = False
+    else:
+        shim_usable = True
+    return shim if shim_usable else None
 
 
 def register_autoupdate(app: Path, venv_python: Path, hour: int, minute: int, proxy: str | None) -> bool:

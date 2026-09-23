@@ -157,7 +157,8 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 |---|---|
 | **安装源** | `https://github.com/kingkemander/cad-helper`（默认分支 `main`） |
 | **引导器（已校验）** | Release `v1.5.14`，SHA-256 `710ca9da…61f51` |
-| 克隆体积 | ≈ 5 MB |
+| 克隆体积 | `app` ≈ 228 MB（含 `.git` 23 MB） |
+| **磁盘占用** | **实测约 2.7 GB**（`app` 228M + `.venv` 2.5G；numpy/fontTools/ezdxf/openpyxl/lxml/docx）。引导器要求 **≥ 3 GB** 空闲 |
 | 上游原作者 | `https://github.com/akaDJL/-cad-`（MIT，仅作溯源） |
 | Python 要求 | **≥ 3.10**（3.9 会直接报 `requires a different Python`） |
 | 核心依赖 | `ezdxf>=1.3` |
