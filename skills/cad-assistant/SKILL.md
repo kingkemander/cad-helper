@@ -22,7 +22,7 @@ description: "一键安装并在工作区注册「AutoCAD 助手」智能体，�
 把 `<WORKSPACE>` 替换成当前工作区的绝对路径，然后执行：
 
 ```bash
-python3 -c "import hashlib,pathlib,urllib.request;u='https://github.com/kingkemander/cad-helper/releases/download/v1.5.14/bootstrap_cad_assistant.py';p=pathlib.Path('<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py');p.parent.mkdir(parents=True,exist_ok=True);d=urllib.request.urlopen(u,timeout=180).read();assert hashlib.sha256(d).hexdigest()=='710ca9da6f02879e6b675acddcabcf1cb82ae07e3b35c67da6655e783f361f51','引导器校验失败，请勿运行';p.write_bytes(d)" && python3 "<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py" --workspace "<WORKSPACE>"
+python3 -c "import hashlib,pathlib,urllib.request;u='https://github.com/kingkemander/cad-helper/releases/download/v1.5.14/bootstrap_cad_assistant.py';p=pathlib.Path('<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py');p.parent.mkdir(parents=True,exist_ok=True);d=urllib.request.urlopen(u,timeout=180).read();assert hashlib.sha256(d).hexdigest()=='e1a371f99475ec6b73f85af3c86d2fb2fa4fa1cfbb96bc942487370c5b76aad9','引导器校验失败，请勿运行';p.write_bytes(d)" && python3 "<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py" --workspace "<WORKSPACE>"
 ```
 
 **这一步会真实改动用户电脑**，动手前必须取得一次明确确认，并用一段话说清将要做什么：
@@ -156,7 +156,7 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 | 项 | 值 |
 |---|---|
 | **安装源** | `https://github.com/kingkemander/cad-helper`（默认分支 `main`） |
-| **引导器（已校验）** | Release `v1.5.14`，SHA-256 `710ca9da…61f51` |
+| **引导器（已校验）** | Release `v1.5.14`，SHA-256 `e1a371f9…6aad9` |
 | 克隆体积 | `app` ≈ 228 MB（含 `.git` 23 MB） |
 | **磁盘占用** | **实测约 2.7 GB**（`app` 228M + `.venv` 2.5G；numpy/fontTools/ezdxf/openpyxl/lxml/docx）。引导器要求 **≥ 3 GB** 空闲 |
 | 上游原作者 | `https://github.com/akaDJL/-cad-`（MIT，仅作溯源） |
