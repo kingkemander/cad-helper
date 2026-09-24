@@ -368,3 +368,108 @@ def test_real_export_keeps_chinese_readable(tmp_path):
                    capture_output=True).stdout
     assert b"\xe6\x96\x9c" in dump, "DWG 里找不到『斜』的 UTF-8 字节"
     assert "斜管沉淀池" in dump.decode("utf-8", "replace")
+
+
+# --------------------------------------------------------------- Windows 探测
+# 背景：ODA 的 Windows 安装器把版本号写进目录名，且默认不加 PATH。
+# 只靠 shutil.which 会漏判成"没装 ODA"，用户被降级到 com（要先装整台 CAD）。
+
+
+def test_version_key_extracts_and_orders():
+    assert D._version_key("ODAFileConverter 27.1.0") == (27, 1, 0)
+    assert D._version_key("ODAFileConverter 9.2") == (9, 2)
+    # 数字多的更新；没有数字的兜底为 (0,)，不会被排到前面
+    assert D._version_key("ODAFileConverter 27.1.0") > D._version_key("ODAFileConverter 25.4.0")
+    assert D._version_key("ODAFileConverter") == (0,)
+
+
+def test_scan_oda_dirs_picks_newest_version(tmp_path):
+    oda = tmp_path / "ODA"
+    for ver in ("25.4.0", "27.1.0", "26.2.0"):
+        d = oda / f"ODAFileConverter {ver}"
+        d.mkdir(parents=True)
+        (d / "ODAFileConverter.exe").write_bytes(b"")
+
+    got = D._scan_oda_dirs([str(tmp_path)])
+    assert len(got) == 3
+    assert "27.1.0" in got[0], "最新版必须排第一"
+    assert "25.4.0" in got[-1], "最旧版排最后"
+
+
+def test_scan_oda_dirs_ignores_unrelated_and_incomplete(tmp_path):
+    oda = tmp_path / "ODA"
+    # 名字对但没有 exe（装了一半）
+    (oda / "ODAFileConverter 27.1.0").mkdir(parents=True)
+    # 名字不对
+    other = oda / "SomeOtherTool"
+    other.mkdir(parents=True)
+    (other / "ODAFileConverter.exe").write_bytes(b"")
+
+    assert D._scan_oda_dirs([str(tmp_path)]) == []
+
+
+def test_scan_oda_dirs_tolerates_missing_root(tmp_path):
+    assert D._scan_oda_dirs([str(tmp_path / "does-not-exist")]) == []
+    assert D._scan_oda_dirs([]) == []
+
+
+def test_scan_oda_dirs_merges_multiple_roots(tmp_path):
+    """Program Files 与 Program Files (x86) 都要扫，且跨根目录也按版本排。"""
+    pf = tmp_path / "PF"
+    pf86 = tmp_path / "PF86"
+    for root, ver in ((pf, "25.4.0"), (pf86, "27.1.0")):
+        d = root / "ODA" / f"ODAFileConverter {ver}"
+        d.mkdir(parents=True)
+        (d / "ODAFileConverter.exe").write_bytes(b"")
+
+    got = D._scan_oda_dirs([str(pf), str(pf86)])
+    assert len(got) == 2
+    assert "27.1.0" in got[0]
+
+
+def test_windows_candidates_empty_on_posix():
+    """macOS/Linux 上不该去扫 C 盘，直接返回空。"""
+    import os as _os
+    if _os.name != "nt":
+        assert D._windows_oda_candidates() == []
+
+
+def test_find_backend_exe_falls_back_to_hook(monkeypatch):
+    """静态 probe 落空时，必须去跑动态钩子（Windows 扫描）。"""
+    monkeypatch.setattr(D, "_PROBE_HOOKS",
+                        {"oda": lambda: ["/fake/ODAFileConverter.exe"]})
+    monkeypatch.setattr(D, "_probe_one", lambda names: None)
+    monkeypatch.setattr(D.os.path, "exists", lambda p: p == "/fake/ODAFileConverter.exe")
+
+    assert D.find_backend_exe("oda") == "/fake/ODAFileConverter.exe"
+
+
+def test_find_backend_exe_prefers_static_probe(monkeypatch):
+    """静态路径能用时就不该再扫（macOS 上少一次目录遍历）。"""
+    called = []
+
+    def _hook():
+        called.append(1)
+        return ["/scan/should/not/be/used.exe"]
+
+    monkeypatch.setattr(D, "_PROBE_HOOKS", {"oda": _hook})
+    monkeypatch.setattr(D, "_probe_one", lambda names: "/Applications/ODAFileConverter.app/x")
+
+    assert D.find_backend_exe("oda") == "/Applications/ODAFileConverter.app/x"
+    assert called == [], "静态命中后不该再跑动态钩子"
+
+
+def test_backend_available_uses_find_backend_exe(monkeypatch):
+    monkeypatch.setattr(D, "find_backend_exe", lambda name: "/whatever" if name == "oda" else None)
+    assert D.backend_available("oda") is True
+    assert D.backend_available("libredwg") is False
+    assert D.backend_available("no-such-backend") is False
+
+
+def test_oda_install_hint_says_no_registration():
+    """官网实测不用注册，指引里别再写"注册后下载"。"""
+    hint = D.BACKENDS["oda"]["install"]
+    assert "guestfiles/oda_file_converter" in hint
+    assert "注册" not in hint or "无需注册" in hint
+    assert "Windows" in hint, "Windows 用户也要看得懂"
+

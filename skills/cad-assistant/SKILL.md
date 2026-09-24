@@ -26,8 +26,12 @@ description: "一键安装并在工作区注册「AutoCAD 助手」智能体，�
 python3 -c "import hashlib,pathlib,urllib.request;u='https://github.com/kingkemander/cad-helper/releases/download/v1.5.14/bootstrap_cad_assistant.py';p=pathlib.Path('<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py');p.parent.mkdir(parents=True,exist_ok=True);d=urllib.request.urlopen(u,timeout=180).read();assert hashlib.sha256(d).hexdigest()=='4a1e56ab35e9cac707b5a6f8d67bc9acd0ad00b4dd3b6b6c8a709a2141dc9c9a','引导器校验失败，请勿运行';p.write_bytes(d)" && python3 "<WORKSPACE>/.spaceagents/plugins/cad-assistant/bootstrap-v1.5.14.py" --workspace "<WORKSPACE>"
 ```
 
+> **Windows 用户**：把上面两条命令里的 `python3` 都换成 `py -3`（或 `python`），其余参数不变。
+
 > **先确认 Python 版本**：跑 `python3 --version`（Windows：`py -3 --version`）必须 ≥ 3.10。
-> 低于 3.10（例如 macOS 自带的 3.9）会直接失败。macOS 可用 `brew install python@3.12` 补一个；
+> 低于 3.10 会直接失败——macOS 自带的就是 3.9，Windows 上则常见没装 Python。补装办法：
+> macOS `brew install python@3.12`；Windows `winget install Python.Python.3.12`，
+> 或去 `https://www.python.org/downloads/` 下载安装包（装时勾上 "Add to PATH"）。
 > **不要用 `sudo` 装，也不要动系统自带的 Python。**
 
 **这一步会真实改动用户电脑**，动手前必须取得一次明确确认，并用一段话说清将要做什么：
@@ -131,12 +135,24 @@ python3 ".../bootstrap-v1.5.14.py" --workspace "<WORKSPACE>" --proxy http://127.
 LibreDWG 会把约一半标注的驱动点写坏，ODA 不会。**装了 ODA 后无需改任何配置**，
 `envcad dwg` 会自动优先选它（探测顺序 `oda > libredwg > com`）。
 
-- 下载页：`https://www.opendesign.com/guestfiles/oda_file_converter`（免费，**无需注册**，
-  页面上就是直链；选自己平台：macOS arm64 / x64、Windows x64、Linux）
-- macOS：装完把 `ODAFileConverter.app` 放进 `/Applications`（`ditto` 复制，别用 `cp -R`），
-  再去掉下载隔离属性 `xattr -dr com.apple.quarantine /Applications/ODAFileConverter.app`
-- 体积约 149 MB，已公证签名（`Notarized Developer ID`），装前仍要先征得用户同意
-- 装完自检：`envcad dwg <某个.dxf>`，输出应为 **AC1032** 而非 AC1015
+下载页（免费、**无需注册**，页面上就是直链）：
+`https://www.opendesign.com/guestfiles/oda_file_converter`
+
+| 平台 | 怎么装 | 装完在哪 |
+|---|---|---|
+| **macOS** | 下载 dmg，把 `ODAFileConverter.app` 放进 `/Applications`；用 `ditto` 复制（别用 `cp -R`），再去隔离属性：`xattr -dr com.apple.quarantine /Applications/ODAFileConverter.app` | 固定路径，本工具直接探测 |
+| **Windows** | 下载 x64 安装包，**一路默认下一步即可**，不用改安装目录 | `C:\Program Files\ODA\ODAFileConverter <版本>\` |
+| Linux | 下载对应包解开，把可执行文件放进 `PATH` | 走 `PATH` |
+
+- 体积约 150 MB，装前先征得用户同意。
+- **装完自检**：`envcad dwg <某个.dxf>`，输出应为 **AC1032** 而非 AC1015。
+- **Windows 用户不需要手动配 PATH**：本工具会去 `Program Files`（含 x86）下的 `ODA\`
+  目录扫描，自动挑版本号最新的那个——因为 ODA 的 Windows 安装器**把版本号写进目录名、
+  且默认不把自己加进 PATH**，光靠 `which` 是找不到的。只有**装在别的盘**时，才需要自己
+  把那个目录加进 `PATH`。
+- ⚠️ **v1.5.14 及更早的版本没有这个 Windows 扫描逻辑**，装了 ODA 也认不出来，会掉到
+  需要装整台 CAD 的 `com` 后端。Windows 用户若发现"装了 ODA 却仍走 com"，先升级：
+  `git pull --ff-only`。
 
 **没装 ODA 时本工具会主动提醒**（单张和批量目录都会提醒），不会再悄悄降级。
 
@@ -151,12 +167,14 @@ LibreDWG 会把约一半标注的驱动点写坏，ODA 不会。**装了 ODA 后
 | **QCAD** | DXF 完全可用；DWG 是**试用**插件 | 免费（开源） |
 | LibreCAD | DXF / DWG 都能读 | 免费（开源） |
 
-**QCAD 的 DWG 是试用版**（插件 `libqcaddwg.dylib` 内是 `TRIAL-ADD-ONS` / `TrialExpired`），
+**QCAD 的 DWG 支持是试用版**（插件内带 `TRIAL-ADD-ONS` / `TrialExpired` 字样，满一年停用），
 所以推荐给用户的组合是：**本工具出 DXF，或先用 ODA 把 DWG 转回 DXF，再在 QCAD 里打开**——
 全程免费，且没有试用提示。
 
-- macOS：`brew install --cask qcad`（约 338 MB）
-- Windows：官网 `https://qcad.org/en/download` 下载安装包
+| 平台 | 怎么装 |
+|---|---|
+| macOS | `brew install --cask qcad`（约 338 MB） |
+| Windows | 官网 `https://qcad.org/en/download` 下安装包，一路默认下一步 |
 
 ---
 
@@ -209,7 +227,7 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 |---|---|
 | **安装源** | `https://github.com/kingkemander/cad-helper`（默认分支 `main`） |
 | **引导器（已校验）** | Release `v1.5.14`，SHA-256 `4a1e56ab…c9c9a` |
-| 克隆体积 | `app` ≈ 6 MB（APFS；含 `.git`，保留完整提交历史） |
+| 克隆体积 | `app` ≈ 6 MB（含 `.git`，保留完整提交历史） |
 | **磁盘占用** | **实测约 114 MB**（`app` 6.1M + `.venv` 108M）。引导器要求 **≥ 1 GB** 空闲，余量留给 pip 下载与构建 wheel 的临时峰值 |
 | 上游原作者 | `https://github.com/akaDJL/-cad-`（MIT，仅作溯源） |
 | Python 要求 | **≥ 3.10**（3.9 会直接报 `requires a different Python`） |

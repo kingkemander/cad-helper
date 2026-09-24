@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -59,6 +60,7 @@ __all__ = [
     "export_dwg",
     "export_dir",
     "backend_help",
+    "find_backend_exe",
     "normalize_version",
 ]
 
@@ -74,7 +76,8 @@ BACKENDS: dict[str, dict] = {
         "versions": ("2018", "2013", "2010", "2007", "2004", "2000", "r14", "r12"),
         "default": "2018",
         "keeps_dimension": True,
-        "install": "https://www.opendesign.com/guestfiles/oda_file_converter（免费注册后下载）",
+        "install": "https://www.opendesign.com/guestfiles/oda_file_converter"
+                   "（免费、无需注册；装完自动识别，macOS 与 Windows 都支持）",
     },
     "libredwg": {
         "probe": ["dxf2dwg"],
@@ -111,6 +114,76 @@ def _probe_one(names: list[str]) -> str | None:
     return None
 
 
+def _version_key(name: str) -> tuple[int, ...]:
+    """从目录名里抠版本号用于排序：`ODAFileConverter 27.1.0` → (27, 1, 0)。"""
+    return tuple(int(n) for n in re.findall(r"\d+", name)) or (0,)
+
+
+def _scan_oda_dirs(roots: list[str]) -> list[str]:
+    """在给定的 Program Files 根目录下扫 ODA 安装，版本高的排前面。
+
+    单独拆出来是为了能在非 Windows 上测——测试直接喂临时目录进来。
+    """
+    found: list[tuple[tuple[int, ...], str]] = []
+    for root in roots:
+        oda_dir = os.path.join(root, "ODA")
+        try:
+            entries = os.listdir(oda_dir)
+        except OSError:
+            continue
+        for name in entries:
+            if not name.lower().startswith("odafileconverter"):
+                continue
+            exe = os.path.join(oda_dir, name, "ODAFileConverter.exe")
+            if os.path.exists(exe):
+                found.append((_version_key(name), exe))
+    found.sort(key=lambda kv: kv[0], reverse=True)
+    return [p for _, p in found]
+
+
+def _windows_oda_candidates() -> list[str]:
+    """Windows 上 ODA File Converter 的位置，版本高的排前面。
+
+    为什么不能只靠 `shutil.which("ODAFileConverter")`
+    ------------------------------------------------
+    macOS 的 dmg 装完固定在 /Applications，路径是死的、写死即可；
+    Windows 的安装器不一样：**把版本号写进目录名**
+        <Program Files>\\ODA\\ODAFileConverter 27.1.0\\ODAFileConverter.exe
+    而且**默认不把自己加进 PATH**。所以 Windows 用户装了 ODA 之后
+    `which` 一样找不到，会被误判成"没装"而掉到 com 后端（那要求装整台 CAD）。
+    只能去默认目录里扫，再按版本号挑最新的。
+
+    用户装到别的盘时扫不到属正常，此时仍可把该目录加进 PATH 自救。
+    """
+    if os.name != "nt":
+        return []
+    roots = [os.environ.get(v) for v in
+             ("ProgramW6432", "ProgramFiles", "ProgramFiles(x86)")]
+    roots = [r for r in dict.fromkeys(roots) if r] or [r"C:\Program Files"]
+    return _scan_oda_dirs(roots)
+
+
+# 各后端可选的"动态探测"钩子：静态 probe 找不到时再跑
+_PROBE_HOOKS: dict[str, Callable[[], list[str]]] = {
+    "oda": _windows_oda_candidates,
+}
+
+
+def find_backend_exe(name: str) -> str | None:
+    """解析某后端的可执行文件路径：先静态 probe，再跑动态钩子。"""
+    meta = BACKENDS.get(name) or {}
+    got = _probe_one(meta.get("probe") or [])
+    if got:
+        return got
+    hook = _PROBE_HOOKS.get(name)
+    if hook:
+        # 钩子已按"新→旧"排好，且返回的都是绝对路径
+        for c in hook():
+            if os.path.exists(c):
+                return c
+    return None
+
+
 def backend_available(name: str) -> bool:
     """该后端此刻是否可用。"""
     if name == "com":
@@ -119,10 +192,9 @@ def backend_available(name: str) -> bool:
         except Exception:
             return False
         return callable(Dispatch)  # 有 pywin32 才可能走 COM
-    meta = BACKENDS.get(name)
-    if not meta:
+    if name not in BACKENDS:
         return False
-    return _probe_one(meta["probe"]) is not None
+    return find_backend_exe(name) is not None
 
 
 def available_backends() -> list[str]:
@@ -274,7 +346,7 @@ def _prepare_libredwg_copy(dxf_path: str, workdir: str) -> str:
 
 # ---------------------------------------------------------------- 各后端实现
 def _convert_libredwg(dxf: str, dwg: str, version: str, workdir: str) -> tuple[bool, str]:
-    exe = _probe_one(BACKENDS["libredwg"]["probe"])
+    exe = find_backend_exe("libredwg")
     if not exe:
         return False, "未找到 dxf2dwg"
 
@@ -294,7 +366,7 @@ def _convert_libredwg(dxf: str, dwg: str, version: str, workdir: str) -> tuple[b
 
 def _convert_oda(dxf: str, dwg: str, version: str, workdir: str) -> tuple[bool, str]:
     """ODA File Converter 是"整目录"式的：入目录 → 出目录，需同名进出。"""
-    exe = _probe_one(BACKENDS["oda"]["probe"])
+    exe = find_backend_exe("oda")
     if not exe:
         return False, "未找到 ODA File Converter"
 
