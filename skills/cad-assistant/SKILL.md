@@ -111,15 +111,32 @@ python3 ".../bootstrap-v1.5.14.py" --workspace "<WORKSPACE>" --proxy http://127.
   关键尺寸说明、以及明确的假定值列表。
 - **审图只认规范**：逐条给判据、条款号和出处，不确定就写「不确定」，绝不猜条款号。
   规范正文只作判据，不整篇复制或再分发。**不代替工程师签字、盖章或承担设计责任。**
-- **DWG 导出要如实说明限制**：DWG 无 Python 库可直接写，必须借本机转换器（ODA / LibreDWG /
-  本机 CAD）。用 LibreDWG 时**保留** DIMENSION 实体与显示块（打开看图是对的、尺寸文字可读），
-  但**约一半标注会丢驱动点**（实测 68 张 / 24 个标注，11 个测量值归零或漂移）——看图没事，
-  **一改就出问题**（拉伸不联动、程序读测量值读到 0），且只写到 r2004；
-  导出件是交付副本，后续修改以 DXF 为准。不要声称两者完全等价。
+- **DWG 导出先说清用的哪个转换器**：DWG 无 Python 库可直接写，必须借本机转换器。
+  **装了 ODA File Converter 就优先用它，且不必再提"有损"**——实测 12 张图 / 24 个标注，
+  测量值 **0 损坏**，输出 AC1032(R2018)。检测顺序 `oda > libredwg > com`，装到
+  `/Applications/ODAFileConverter.app` 即自动接管，无需改代码。
+  未装 ODA 才会退到 LibreDWG：**保留** DIMENSION 实体与显示块（打开看图是对的、尺寸文字可读），
+  但**约一半标注会丢驱动点**（同批样本实测 11/24 归零或漂移）——看图没事、**一改就出问题**
+  （拉伸不联动、程序读测量值读到 0），且只写到 r2004。此时必须如实告知，并建议装 ODA。
+  导出件始终是交付副本，改图以 DXF 为准。不要声称两者完全等价。
 - **不擅自装软件**：需要 ODA 等新工具时先说明用途、体积、系统影响和替代方案，取得确认才动手；
   用户说不装就不装。
 - **不动系统 Python**：一律用安装目录下的独立 venv。
 - macOS / Linux **不支持**把图纸推送到 AutoCAD（COM 桥接仅 Windows）；不要声称已推送。
+
+---
+
+## 让 DWG 无损：装 ODA（可选，但推荐）
+
+LibreDWG 会把约一半标注的驱动点写坏，ODA 不会。**装了 ODA 后无需改任何配置**，
+`envcad dwg` 会自动优先选它（探测顺序 `oda > libredwg > com`）。
+
+- 下载页：`https://www.opendesign.com/guestfiles/oda_file_converter`（免费，**无需注册**，
+  页面上就是直链；选自己平台：macOS arm64 / x64、Windows x64、Linux）
+- macOS：装完把 `ODAFileConverter.app` 放进 `/Applications`（`ditto` 复制，别用 `cp -R`），
+  再去掉下载隔离属性 `xattr -dr com.apple.quarantine /Applications/ODAFileConverter.app`
+- 体积约 149 MB，已公证签名（`Notarized Developer ID`），装前仍要先征得用户同意
+- 装完自检：`envcad dwg <某个.dxf>`，输出应为 **AC1032** 而非 AC1015
 
 ---
 
@@ -177,6 +194,7 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 | 上游原作者 | `https://github.com/akaDJL/-cad-`（MIT，仅作溯源） |
 | Python 要求 | **≥ 3.10**（3.9 会直接报 `requires a different Python`） |
 | 核心依赖 | `ezdxf>=1.3` |
+| **DWG 转换器** | 首选 **ODA File Converter 27.1**（免费、已公证签名）；未装则退到 LibreDWG。探测顺序 `oda > libredwg > com`，装到 `/Applications/ODAFileConverter.app` 即自动接管，**无需改代码** |
 | 许可证 | MIT（保留原作者版权声明，不得删除） |
 
 **禁止项**
