@@ -156,8 +156,6 @@ LibreDWG 会把约一半标注的驱动点写坏，ODA 不会。**装了 ODA 后
 全程免费，且没有试用提示。
 
 - macOS：`brew install --cask qcad`（约 338 MB）
-- **磁盘紧张时可以装到外置盘**：`brew install --cask qcad --appdir=/Volumes/<盘名>/Applications`
-  —— 但必须提醒用户：**盘不插着，软件就打不开**。
 - Windows：官网 `https://qcad.org/en/download` 下载安装包
 
 ---
