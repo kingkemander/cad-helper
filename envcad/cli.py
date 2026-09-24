@@ -342,6 +342,26 @@ def _deliver(out_dir: str, paths) -> None:
     print(deliver(out_dir, paths))
 
 
+def _warn_dwg_lossy(backend: str) -> None:
+    """非 ODA 转换器的降级提醒（keeps_dimension 为真则无需提醒）。
+
+    说症状要说准：DIMENSION 实体和显示块都**在**，打开看图、读尺寸文字都正常；
+    丢的是驱动点——拉伸不联动、程序 get_measurement() 会读到 0。
+    别写成"尺寸会变成普通线和文字"，实测不成立（老版本此处就写错了）。
+    装了 ODA 就完全没这问题，所以顺带把安装指引给出来。
+    """
+    from .engine import dwg_export as DX
+    if DX.BACKENDS[backend]["keeps_dimension"]:
+        return
+    print(f"  [提醒] 当前用的是 {DX.BACKENDS[backend]['label']}，"
+          "标注保不住驱动点（实测约一半归零或漂移）：")
+    print("         打开看图、尺寸文字都正常，但拉伸不联动、"
+          "程序读测量值会读到 0。")
+    print("         想要能联动的智能标注，建议装 ODA File Converter（免费）：")
+    print("         https://www.opendesign.com/guestfiles/oda_file_converter")
+    print("         装到 /Applications 后本工具自动优先使用，无需改配置。")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="envcad",
@@ -801,6 +821,7 @@ def main(argv=None):
             print(f"\n完成 {n}/{len(results)} 张 → {args.out or args.path}")
             if n < len(results):
                 print("[注意] 有转换失败的图，交付前请逐张确认或用别的转换器重试。")
+            _warn_dwg_lossy(backend)
             return 0 if n == len(results) else 1
 
         out = args.out
@@ -810,10 +831,8 @@ def main(argv=None):
         ok, msg = DX.export_dwg(args.path, out, backend=backend,
                                 version=args.dwg_version)
         print(("  ✓ " + msg) if ok else ("  ✗ " + msg))
-        if ok and not DX.BACKENDS[backend]["keeps_dimension"]:
-            print("  [说明] 该转换器保不住 DIMENSION 智能标注，"
-                  "到 CAD 里尺寸会变成普通线和文字（不能联动改）。"
-                  "需要可编辑标注请用 ODA 或 Windows 上的原生 CAD。")
+        if ok:
+            _warn_dwg_lossy(backend)
         return 0 if ok else 1
 
     if args.command == "test":

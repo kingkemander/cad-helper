@@ -138,6 +138,28 @@ LibreDWG 会把约一半标注的驱动点写坏，ODA 不会。**装了 ODA 后
 - 体积约 149 MB，已公证签名（`Notarized Developer ID`），装前仍要先征得用户同意
 - 装完自检：`envcad dwg <某个.dxf>`，输出应为 **AC1032** 而非 AC1015
 
+**没装 ODA 时本工具会主动提醒**（单张和批量目录都会提醒），不会再悄悄降级。
+
+---
+
+## 让用户能打开图纸：装 QCAD（可选）
+
+本工具只**生成** DXF/DWG，不带看图界面。用户想双击打开图纸，需要一个 CAD 程序：
+
+| 程序 | 能打开 | 成本 |
+|---|---|---|
+| **QCAD** | DXF 完全可用；DWG 是**试用**插件 | 免费（开源） |
+| LibreCAD | DXF / DWG 都能读 | 免费（开源） |
+
+**QCAD 的 DWG 是试用版**（插件 `libqcaddwg.dylib` 内是 `TRIAL-ADD-ONS` / `TrialExpired`），
+所以推荐给用户的组合是：**本工具出 DXF，或先用 ODA 把 DWG 转回 DXF，再在 QCAD 里打开**——
+全程免费，且没有试用提示。
+
+- macOS：`brew install --cask qcad`（约 338 MB）
+- **磁盘紧张时可以装到外置盘**：`brew install --cask qcad --appdir=/Volumes/<盘名>/Applications`
+  —— 但必须提醒用户：**盘不插着，软件就打不开**。
+- Windows：官网 `https://qcad.org/en/download` 下载安装包
+
 ---
 
 ## 更新
@@ -195,6 +217,7 @@ rm -rf "<WORKSPACE>/.spaceagents/plugins/cad-assistant"    # 绑定指针
 | Python 要求 | **≥ 3.10**（3.9 会直接报 `requires a different Python`） |
 | 核心依赖 | `ezdxf>=1.3` |
 | **DWG 转换器** | 首选 **ODA File Converter 27.1**（免费、已公证签名）；未装则退到 LibreDWG。探测顺序 `oda > libredwg > com`，装到 `/Applications/ODAFileConverter.app` 即自动接管，**无需改代码** |
+| **看图程序** | 本工具不提供看图界面。推荐 QCAD（DXF 免费；其 DWG 插件是**试用版**）或 LibreCAD。约 338 MB |
 | 许可证 | MIT（保留原作者版权声明，不得删除） |
 
 **禁止项**
